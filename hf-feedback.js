@@ -3,7 +3,7 @@
 
   if (window.HFFeedback) return;
 
-  var SCRIPT = document.currentScript;
+  var SCRIPT = document.currentScript || document.querySelector('script[data-key][src*="hf-feedback"]');
   var DEFAULT_API = 'https://api.dashboard.honest-family.com/api/public/feedback-pins';
   var MOBILE_MAX = 640;
   var LONG_PRESS_MS = 520;
@@ -583,7 +583,10 @@
   Feedback.prototype.load = function () {
     var self = this;
     return fetch(this.api + '/' + encodeURIComponent(this.key), { headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(r); })
+      .then(function (r) {
+        if (r.status === 403 || r.status === 404) self.disable(r.status);
+        return r.ok ? r.json() : Promise.reject(r);
+      })
       .then(function (j) {
         self.items = (j.data && j.data.items) || [];
         self.siteName = j.data && j.data.site && j.data.site.name;
@@ -594,6 +597,19 @@
         self.showNudge();
       })
       .catch(function () {});
+  };
+
+  Feedback.prototype.disable = function (status) {
+    this.on = false;
+    document.documentElement.classList.remove('hffb-on');
+    if (this.host.parentNode) this.host.parentNode.removeChild(this.host);
+    var global = document.getElementById('hffb-global');
+    if (global && global.parentNode) global.parentNode.removeChild(global);
+    if (window.console && console.warn) {
+      console.warn('[hf-feedback] ' + (status === 403
+        ? '이 주소(' + location.origin + ')는 피드백 사이트에 등록되지 않았어요.'
+        : '피드백 사이트 키를 찾을 수 없어요.') + ' 대시보드 > 고객 피드백에서 확인해 주세요.');
+    }
   };
 
   Feedback.prototype.request = function (method, path, body) {
@@ -1110,17 +1126,42 @@
   };
 
   var instance = null;
+  var waitingForInvite = false;
+
+  function invited(opts) {
+    if (!opts.invite) return true;
+    var m = (location.search + '&' + location.hash).match(/hffb=(on|off|\d+)/);
+    if (m && m[1] === 'off') {
+      store('local', 'hffb-invited', null);
+      return false;
+    }
+    if (m) {
+      store('local', 'hffb-invited', '1');
+      return true;
+    }
+    return store('local', 'hffb-invited') === '1';
+  }
 
   window.HFFeedback = {
     init: function (opts) {
       if (instance || !opts || !opts.key) return instance;
-      var start = function () { instance = new Feedback(opts); };
+      var start = function () {
+        if (instance) return;
+        if (!invited(opts)) {
+          if (!waitingForInvite) {
+            waitingForInvite = true;
+            window.addEventListener('hashchange', start);
+          }
+          return;
+        }
+        instance = new Feedback(opts);
+      };
       if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
       return instance;
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.0.2'
+    version: '1.1.0'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
@@ -1128,7 +1169,8 @@
       key: SCRIPT.dataset.key,
       api: SCRIPT.dataset.api,
       top: SCRIPT.dataset.top,
-      hide: SCRIPT.dataset.hide
+      hide: SCRIPT.dataset.hide,
+      invite: SCRIPT.hasAttribute('data-invite') && !/^(false|0|off)$/i.test(SCRIPT.dataset.invite)
     });
   }
 })();

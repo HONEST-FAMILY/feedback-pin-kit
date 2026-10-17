@@ -10,18 +10,24 @@
 
 ## 붙이는 법
 
-대시보드 > 고객 피드백 > '+ 사이트 연결'에서 사이트를 만들면 나오는 한 줄을 `</body>` 바로 위에 넣습니다.
+AI 대시보드에서 그 프로젝트로 이슈를 만들고 라이브러리 **고객사 피드백 시스템 도입**을 고르면, 워커가 사이트 연결부터 붙이기·검수까지 처리합니다.
+
+직접 할 때는 대시보드 > 고객 피드백 > '+ 사이트 연결'에서 사이트를 만들면 나오는 한 줄을, 모든 화면이 함께 쓰는 레이아웃의 `</body>` 바로 위에 넣습니다.
 
 ```html
-<script src="https://honest-family.github.io/feedback-pin-kit/hf-feedback.js" data-key="fb_xxxxxxxx" defer></script>
+<script src="https://honest-family.github.io/feedback-pin-kit/hf-feedback.js" data-key="fb_xxxxxxxx" data-invite defer></script>
 ```
 
 | 속성 | 설명 |
 |---|---|
 | `data-key` | 사이트 키 (필수) |
+| `data-invite` | 초대 링크(`사이트주소/?hffb=on`)를 한 번 연 기기에서만 단추를 보여 준다. 일반 방문자에게는 안 보인다. 그 기기에서 끄려면 `?hffb=off`. 공개 전 시안에서만 뺀다 |
 | `data-top` | 오른쪽 위 단추의 위쪽 여백(px). 사이트 머리줄과 겹치면 늘린다 |
 | `data-hide` | 피드백 모드에서 숨길 요소 선택자(예: 사이트 전용 마우스 커서 `#cursor`) |
 | `data-api` | 저장 주소를 바꿀 때만 |
+
+- 사이트 주소가 대시보드에 등록되지 않았거나(403) 사이트 연결이 해제되면(404) 단추가 스스로 사라지고, 개발자 도구 콘솔에 `[hf-feedback]` 안내가 한 줄 남습니다.
+- 사이트에 보안 정책(Content-Security-Policy)이 있으면 `script-src`에 `https://honest-family.github.io`, `connect-src`에 `https://api.dashboard.honest-family.com`을 더합니다.
 
 ## 한계
 

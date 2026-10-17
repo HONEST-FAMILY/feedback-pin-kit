@@ -25,19 +25,19 @@
   <h1>화면 위에 바로 남기는<br><em>고객 피드백 핀</em></h1>
   <p>만들어 준 사이트에서 고객이 고치고 싶은 곳을 우클릭(폰은 꾹 누르기)해 피드백을 남기면, 어니스트패밀리 대시보드의 '고객 피드백'에 기기·브라우저·화면 크기와 함께 쌓입니다. 고친 뒤 완료로 표시하면 고객은 목록에서 눌러 그 자리로 바로 가서 확인합니다.</p>
   <div class="card">
-    <b>써 보기</b>
+    <b>고객 사이트에 붙이는 순서</b>
     <ol>
-      <li>프리투플라이 시안 1안을 엽니다.</li>
-      <li>오른쪽 위 <b>피드백 남기기</b>를 켭니다 — 화면 테두리가 파랗게 바뀝니다.</li>
-      <li>PC는 고치고 싶은 곳에 마우스를 올리면 반투명 상자가 뜨고, 우클릭해서 적습니다. 폰은 그 자리를 꾹 누릅니다.</li>
-      <li>대시보드 &gt; 고객 피드백에서 완료로 표시하면, 시안의 <b>목록 &gt; 완료 · 확인해 주세요</b>에서 눌러 그 자리로 갑니다.</li>
+      <li>AI 대시보드에서 그 프로젝트로 이슈를 만들고 라이브러리 <b>고객사 피드백 시스템 도입</b>을 고릅니다. 사이트 연결, 한 줄 붙이기, 검수까지 처리합니다.</li>
+      <li>고객에게 초대 링크(사이트 주소 뒤에 <b>?hffb=on</b>)를 보냅니다. 이 링크를 한 번 연 기기에서만 오른쪽 위 피드백 단추가 보이고, 다른 방문자에게는 보이지 않습니다.</li>
+      <li>고객은 <b>피드백 남기기</b>를 켜고, PC는 고칠 곳을 우클릭, 폰은 꾹 눌러 남깁니다.</li>
+      <li>대시보드 &gt; 고객 피드백에서 완료로 표시하면, 고객은 <b>목록 &gt; 완료 · 확인해 주세요</b>에서 눌러 그 자리로 가서 확인합니다.</li>
     </ol>
-    <a class="btn" href="https://honest-family.github.io/free2fly-references/drafts/1/">프리투플라이 시안 1안에서 써 보기</a>
   </div>
   <div class="card">
-    <b>다른 사이트에 붙이기</b>
-    <p>대시보드 &gt; 고객 피드백 &gt; ‘+ 사이트 연결’에서 받은 한 줄을 사이트의 &lt;/body&gt; 바로 위에 넣습니다.</p>
-    <code>&lt;script src="https://honest-family.github.io/feedback-pin-kit/hf-feedback.js" data-key="fb_..." defer&gt;&lt;/script&gt;</code>
+    <b>직접 붙일 때</b>
+    <p>대시보드 &gt; 고객 피드백 &gt; ‘+ 사이트 연결’에서 받은 한 줄을 모든 화면이 함께 쓰는 레이아웃의 &lt;/body&gt; 바로 위에 넣습니다.</p>
+    <code>&lt;script src="https://honest-family.github.io/feedback-pin-kit/hf-feedback.js" data-key="fb_..." data-invite defer&gt;&lt;/script&gt;</code>
+    <p>data-invite 를 빼면 모든 방문자에게 단추가 보입니다. 공개 전 시안에서만 뺍니다.</p>
   </div>
   <p style="font-size:13px;color:#64748b">어니스트패밀리 자체 제작 · 외부 라이브러리 코드 없음</p>
 </main>
