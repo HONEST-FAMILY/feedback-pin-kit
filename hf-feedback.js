@@ -172,6 +172,7 @@
   }
 
   function isMobileWidth() { return window.innerWidth <= MOBILE_MAX; }
+  function viewW() { return document.documentElement.clientWidth || window.innerWidth; }
 
   function textOf(n) {
     var t = (n.getAttribute && (n.getAttribute('aria-label') || n.getAttribute('alt') || n.getAttribute('placeholder') || n.getAttribute('title'))) || n.innerText || n.textContent || '';
@@ -509,7 +510,9 @@
     ui.tag.innerHTML = esc(describe(n)) + ' <i>· ' + (mobile ? '꾹 눌러서 피드백' : '우클릭해서 피드백') + '</i>';
     var tagTop = r.top - 26;
     if (tagTop < 4) tagTop = r.bottom + 6 < window.innerHeight - 30 && r.height < 120 ? r.bottom + 6 : Math.max(r.top + 6, 6);
-    ui.tag.style.left = clamp(r.left - 3, 4, window.innerWidth - 200) + 'px';
+    var tw = ui.tag.offsetWidth;
+    var tagLeft = r.left - 3 + tw > viewW() - 4 ? r.right + 3 - tw : r.left - 3;
+    ui.tag.style.left = clamp(tagLeft, 4, Math.max(4, viewW() - tw - 4)) + 'px';
     ui.tag.style.top = clamp(tagTop, 4, window.innerHeight - 30) + 'px';
     ui.tag.classList.add('show');
   };
@@ -746,9 +749,9 @@
     var h = card.offsetHeight;
     var left = x + 14;
     var top = y + 10;
-    if (left + w > window.innerWidth - 12) left = x - w - 14;
+    if (left + w > viewW() - 12) left = x - w - 14;
     if (top + h > window.innerHeight - 12) top = y - h - 10;
-    left = clamp(left, 12, window.innerWidth - w - 12);
+    left = clamp(left, 12, viewW() - w - 12);
     top = clamp(top, 12, Math.max(12, window.innerHeight - h - 12));
     var b = this.ui.bar.getBoundingClientRect();
     if (left < b.right + 8 && left + w > b.left - 8 && top < b.bottom + 8 && top + h > b.top - 8) {
@@ -900,7 +903,7 @@
     var item = this.byId(this.openCard);
     var pt = item && this.pointOf(item);
     if (!pt) {
-      this.anchorCard(this.card, window.innerWidth / 2 - 160, window.innerHeight / 2 - 80);
+      this.anchorCard(this.card, viewW() / 2 - 160, window.innerHeight / 2 - 80);
       return;
     }
     this.anchorCard(this.card, pt.x + 22, pt.y - 30);
@@ -1117,7 +1120,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.0.1'
+    version: '1.0.2'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
