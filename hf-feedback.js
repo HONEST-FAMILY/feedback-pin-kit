@@ -393,7 +393,7 @@
     this.ui = {
       hint: this.q('.hint'), hintText: this.q('.hint span'), hover: this.q('.hover'), tag: this.q('.tag'),
       pins: this.q('.pins'), press: this.q('.press'), tg: this.q('.tg'), tgLabel: this.q('.tg .lb'),
-      ls: this.q('.ls'), lsN: this.q('.ls .n'), toast: this.q('.toast'), spot: this.q('.spot'),
+      bar: this.q('.bar'), ls: this.q('.ls'), lsN: this.q('.ls .n'), toast: this.q('.toast'), spot: this.q('.spot'),
       spotSh: this.q('.spot .sh'), spotRg: this.q('.spot .rg')
     };
   };
@@ -649,6 +649,7 @@
     this.pinEls = this.pinEls || {};
     this.items.forEach(function (item) {
       if (!self.here(item)) return;
+      if (item.status === 'confirmed' && self.openCard !== item.id) return;
       keep[item.id] = true;
       var p = self.pinEls[item.id];
       if (!p) {
@@ -747,8 +748,15 @@
     var top = y + 10;
     if (left + w > window.innerWidth - 12) left = x - w - 14;
     if (top + h > window.innerHeight - 12) top = y - h - 10;
-    card.style.left = clamp(left, 12, window.innerWidth - w - 12) + 'px';
-    card.style.top = clamp(top, 12, Math.max(12, window.innerHeight - h - 12)) + 'px';
+    left = clamp(left, 12, window.innerWidth - w - 12);
+    top = clamp(top, 12, Math.max(12, window.innerHeight - h - 12));
+    var b = this.ui.bar.getBoundingClientRect();
+    if (left < b.right + 8 && left + w > b.left - 8 && top < b.bottom + 8 && top + h > b.top - 8) {
+      if (b.bottom + 10 + h <= window.innerHeight - 12) top = b.bottom + 10;
+      else left = Math.max(12, b.left - w - 10);
+    }
+    card.style.left = left + 'px';
+    card.style.top = top + 'px';
   };
 
   Feedback.prototype.fitSheet = function (card) {
@@ -964,7 +972,7 @@
           '<span class="tx"><span class="bd">' + esc(i.body) + '</span><span class="mt">' + esc(meta) + '</span></span>' +
           '<span class="go">' + (i.status === 'done' ? '확인하기' : '보기') + '</span></button>';
       }).join('') : '<div class="empty">' + (self.tab === 'done' ? '아직 완료된 피드백이 없어요.' : self.tab === 'open' ? '남은 피드백이 없어요.' : '피드백이 없어요.') + '</div>') + '</div>' +
-      '<div class="pf">누르면 그 피드백을 남긴 자리로 바로 이동해요.</div>';
+      '<div class="pf">' + (self.tab === 'confirmed' ? '확인 끝난 피드백은 화면에서 숨겨 둬요. 누르면 그 자리에 다시 보여요.' : '누르면 그 피드백을 남긴 자리로 바로 이동해요.') + '</div>';
     panel.querySelector('.x').addEventListener('click', function () { self.closePanel(); });
     Array.prototype.forEach.call(panel.querySelectorAll('.tab'), function (b) {
       b.addEventListener('click', function () { self.tab = b.getAttribute('data-tab'); self.tabChosen = true; self.renderPanel(); });
@@ -1109,7 +1117,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.0.0'
+    version: '1.0.1'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
