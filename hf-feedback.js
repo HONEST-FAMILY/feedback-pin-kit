@@ -1025,7 +1025,12 @@
       }
     }
     var vh = window.innerHeight;
-    if (top < 80 || top + r.height > vh - 80) {
+    var pinned = false;
+    for (var f = target; f && f.nodeType === 1; f = f.parentElement) {
+      var pos = getComputedStyle(f).position;
+      if (pos === 'fixed' || pos === 'sticky') { pinned = true; break; }
+    }
+    if (!pinned && (top < 80 || top + r.height > vh - 80)) {
       var desired = r.height < vh - 160 ? (vh - r.height) / 2 : 80;
       window.scrollTo({ top: Math.max(0, window.scrollY + top - desired), behavior: smooth ? 'smooth' : 'auto' });
     }
