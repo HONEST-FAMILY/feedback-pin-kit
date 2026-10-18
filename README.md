@@ -26,6 +26,7 @@ AI 대시보드에서 그 프로젝트로 이슈를 만들고 라이브러리 **
 | `data-hide` | 피드백 모드에서 숨길 요소 선택자(예: 사이트 전용 마우스 커서 `#cursor`) |
 | `data-api` | 저장 주소를 바꿀 때만 |
 
+- 피드백 모드는 오른쪽 위 단추로 켜고 끕니다(PC는 Esc로도 꺼짐). 켠 채로 다른 화면으로 넘어가면 10분 안에는 이어지고, 그보다 오래 지나 다시 열면 꺼진 채로 시작합니다.
 - 사이트 주소가 대시보드에 등록되지 않았거나(403) 사이트 연결이 해제되면(404) 단추가 스스로 사라지고, 개발자 도구 콘솔에 `[hf-feedback]` 안내가 한 줄 남습니다.
 - 사이트에 보안 정책(Content-Security-Policy)이 있으면 `script-src`에 `https://honest-family.github.io`, `connect-src`에 `https://api.dashboard.honest-family.com`을 더합니다.
 

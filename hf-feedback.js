@@ -7,6 +7,7 @@
   var DEFAULT_API = 'https://api.dashboard.honest-family.com/api/public/feedback-pins';
   var MOBILE_MAX = 640;
   var LONG_PRESS_MS = 520;
+  var MODE_KEEP_MS = 10 * 60 * 1000;
   var MOVE_TOLERANCE = 10;
 
   var KIND = {
@@ -162,6 +163,11 @@
       if (value === null) s.removeItem(key); else s.setItem(key, value);
     } catch (e) {}
     return null;
+  }
+
+  function rememberedMode() {
+    var since = parseInt(store('session', 'hffb-on'), 10);
+    return since > 0 && Date.now() - since < MODE_KEEP_MS;
   }
 
   function normPath(p) {
@@ -329,7 +335,7 @@
     this.top = parseInt(opts.top, 10) || 16;
     this.hideSel = opts.hide || '';
     this.items = [];
-    this.on = store('session', 'hffb-on') === '1';
+    this.on = rememberedMode();
     this.tab = null;
     this.env = detectEnv();
     this.hoverEl = null;
@@ -462,6 +468,11 @@
       if (self.composing) self.closeComposer();
       else if (self.openCard) self.closeCard();
       else if (self.panel) self.closePanel();
+      else if (self.on) self.setMode(false);
+    });
+
+    window.addEventListener('pagehide', function () {
+      if (self.on) store('session', 'hffb-on', String(Date.now()));
     });
 
     window.addEventListener('scroll', function () { self.schedule(); }, true);
@@ -554,7 +565,7 @@
 
   Feedback.prototype.setMode = function (on) {
     this.on = !!on;
-    store('session', 'hffb-on', this.on ? '1' : null);
+    store('session', 'hffb-on', this.on ? String(Date.now()) : null);
     this.applyMode();
     if (!this.on) {
       this.closeComposer();
@@ -1161,7 +1172,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.1.0'
+    version: '1.2.0'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
