@@ -107,6 +107,13 @@
     '.reply{margin-top:10px;padding:9px 11px;border-radius:10px;background:#f0fdf4;color:#14532d;font-size:13px;white-space:pre-wrap}',
     '.reply b{display:block;font-size:11.5px;color:#15803d;margin-bottom:2px}',
     '.wait{margin-top:10px;font-size:12.5px;color:var(--muted)}',
+    '.cmt{margin-top:10px}',
+    '.cmt textarea{min-height:76px}',
+    '.ask{margin-top:10px;padding:9px 11px;border-radius:10px;background:#fef2f2;color:#991b1b;font-size:12.5px;font-weight:600}',
+    '.del{margin-right:auto;height:36px;padding:0 10px;border-radius:10px;font-weight:700;font-size:12.5px;color:#9ca3af}',
+    '.del:hover{color:#dc2626;background:#fef2f2}',
+    '.btn.danger{background:#dc2626;border-color:#dc2626;color:#fff}',
+    '.team{display:inline-flex;align-items:center;height:20px;padding:0 7px;margin-left:6px;border-radius:999px;background:#111827;color:#fff;font-size:11px;font-weight:800;vertical-align:2px}',
     '.panel{position:absolute;right:12px;top:calc(var(--top,16px) + 54px);bottom:12px;width:380px;max-width:calc(100% - 24px);display:flex;flex-direction:column;border-radius:18px;background:#fff;box-shadow:0 24px 60px -18px rgba(15,23,42,.5),0 0 0 1px rgba(15,23,42,.08);pointer-events:auto;z-index:8;animation:in .2s cubic-bezier(.2,.8,.2,1) both;overflow:hidden}',
     '.panel .ph{display:flex;align-items:center;gap:8px;padding:14px 14px 8px}',
     '.panel .ph .t{flex:1;font-weight:800;font-size:16px}',
@@ -175,6 +182,10 @@
     p = p.replace(/index\.html?$/i, '');
     if (p.length > 1) p = p.replace(/\/+$/, '');
     return p || '/';
+  }
+
+  function readOwn(key) {
+    try { return JSON.parse(store('local', 'hffb-own:' + key) || '{}') || {}; } catch (e) { return {}; }
   }
 
   function isMobileWidth() { return window.innerWidth <= MOBILE_MAX; }
@@ -334,6 +345,9 @@
     this.key = opts.key;
     this.top = parseInt(opts.top, 10) || 16;
     this.hideSel = opts.hide || '';
+    this.teamKey = store('local', 'hffb-team:' + this.key) || null;
+    this.team = false;
+    this.own = readOwn(this.key);
     this.items = [];
     this.on = rememberedMode();
     this.tab = null;
@@ -591,9 +605,17 @@
     this.renderPins();
   };
 
+  Feedback.prototype.headers = function (extra, json) {
+    var h = { Accept: 'application/json' };
+    if (json) h['Content-Type'] = 'application/json';
+    if (this.teamKey) h['X-HFFB-Team'] = this.teamKey;
+    if (extra) Object.keys(extra).forEach(function (k) { h[k] = extra[k]; });
+    return h;
+  };
+
   Feedback.prototype.load = function () {
     var self = this;
-    return fetch(this.api + '/' + encodeURIComponent(this.key), { headers: { Accept: 'application/json' } })
+    return fetch(this.api + '/' + encodeURIComponent(this.key), { headers: this.headers() })
       .then(function (r) {
         if (r.status === 403 || r.status === 404) self.disable(r.status);
         return r.ok ? r.json() : Promise.reject(r);
@@ -601,6 +623,12 @@
       .then(function (j) {
         self.items = (j.data && j.data.items) || [];
         self.siteName = j.data && j.data.site && j.data.site.name;
+        self.team = !!(j.data && j.data.team);
+        if (self.teamKey && !self.team) {
+          store('local', 'hffb-team:' + self.key, null);
+          self.teamKey = null;
+        }
+        self.pruneOwn();
         self.renderCount();
         self.renderPins();
         if (self.panel) self.renderPanel();
@@ -623,10 +651,10 @@
     }
   };
 
-  Feedback.prototype.request = function (method, path, body) {
+  Feedback.prototype.request = function (method, path, body, extra) {
     return fetch(this.api + '/' + encodeURIComponent(this.key) + path, {
       method: method,
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: this.headers(extra, method !== 'GET'),
       body: body ? JSON.stringify(body) : undefined
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) {
@@ -634,6 +662,20 @@
         return j.data;
       });
     });
+  };
+
+  Feedback.prototype.saveOwn = function () {
+    store('local', 'hffb-own:' + this.key, Object.keys(this.own).length ? JSON.stringify(this.own) : null);
+  };
+
+  Feedback.prototype.pruneOwn = function () {
+    var self = this;
+    var changed = false;
+    Object.keys(this.own).forEach(function (id) {
+      var item = self.byId(id);
+      if (!item || item.status !== 'open') { delete self.own[id]; changed = true; }
+    });
+    if (changed) this.saveOwn();
   };
 
   Feedback.prototype.showNudge = function () {
@@ -657,6 +699,7 @@
     var open = 0;
     var done = 0;
     this.items.forEach(function (i) { if (i.status === 'open') open++; else if (i.status === 'done') done++; });
+    if (this.team) done = 0;
     var n = this.ui.lsN;
     n.hidden = !(open || done);
     n.classList.toggle('done', done > 0);
@@ -863,6 +906,11 @@
         env: self.env
       };
       self.request('POST', '', payload).then(function (item) {
+        if (item.owner_token) {
+          self.own[item.id] = item.owner_token;
+          self.saveOwn();
+          delete item.owner_token;
+        }
         self.items.push(item);
         self.closeComposer();
         self.showHover(null);
@@ -900,9 +948,23 @@
     this.closeCard();
     this.openCard = item.id;
     var chips = envChips(item.env).map(function (c) { return '<span class="chip">' + esc(c) + '</span>'; }).join('');
-    var actions = '';
-    if (item.status === 'done') actions = '<div class="acts"><button type="button" class="btn again">아직 안 됐어요</button><button type="button" class="btn okb ok">확인했어요</button></div>';
-    else if (item.status === 'confirmed') actions = '<div class="acts"><button type="button" class="btn again">다시 열기</button></div>';
+    var mine = item.status === 'open' && !!this.own[item.id];
+    var acts = [];
+    if (this.team) {
+      if (item.status === 'open') acts.push('<button type="button" class="btn pri finish">완료 처리</button>');
+      else acts.push('<button type="button" class="btn again">다시 열기</button>', '<button type="button" class="btn edit">코멘트 고치기</button>');
+    } else if (item.status === 'done') {
+      acts.push('<button type="button" class="btn again">아직 안 됐어요</button>', '<button type="button" class="btn okb ok">확인했어요</button>');
+    } else if (item.status === 'confirmed') {
+      acts.push('<button type="button" class="btn again">다시 열기</button>');
+    }
+    var del = this.team || mine ? '<button type="button" class="del">지우기</button>' : '';
+    var wait = '';
+    if (item.status === 'open') {
+      wait = this.team
+        ? '<p class="wait">고친 뒤 완료 처리를 누르고 무엇을 고쳤는지 한 줄 남겨 주세요. 고객 화면에 완료 코멘트로 보여요.</p>'
+        : '<p class="wait">팀이 보고 고치는 중이에요. 고치면 초록색으로 바뀌어요.</p>';
+    }
     var card = el('div', 'card');
     card.setAttribute('role', 'dialog');
     card.setAttribute('aria-label', '피드백 ' + item.number + '번');
@@ -911,18 +973,106 @@
       '<p class="body">' + esc(item.body) + '</p>' +
       '<div class="meta">' + esc([item.author_name, when(item.created_at), item.anchor_label].filter(Boolean).join(' · ')) + '</div>' +
       '<div class="env">' + chips + '</div>' +
-      (item.reply ? '<div class="reply"><b>어니스트패밀리 답변</b>' + esc(item.reply) + '</div>' : '') +
-      (item.status === 'open' ? '<p class="wait">팀이 보고 고치는 중이에요. 고치면 초록색으로 바뀌어요.</p>' : '') +
-      actions;
+      this.replyHtml(item) +
+      wait +
+      (acts.length || del ? '<div class="acts">' + del + acts.join('') + '</div>' : '');
     this.root.appendChild(card);
     this.card = card;
     this.positionCard();
     this.renderPins();
     card.querySelector('.x').addEventListener('click', function () { self.closeCard(); });
-    var ok = card.querySelector('.ok');
-    var again = card.querySelector('.again');
-    if (ok) ok.addEventListener('click', function () { self.changeStatus(item, 'confirm'); });
-    if (again) again.addEventListener('click', function () { self.changeStatus(item, 'reopen'); });
+    var on = function (sel, fn) {
+      var b = card.querySelector(sel);
+      if (b) b.addEventListener('click', fn);
+    };
+    on('.ok', function () { self.changeStatus(item, 'confirm'); });
+    on('.again', function () { self.changeStatus(item, 'reopen'); });
+    on('.finish', function () { self.commentForm(item, 'done'); });
+    on('.edit', function () { self.commentForm(item, 'edit'); });
+    on('.del', function () { self.askDelete(item); });
+  };
+
+  Feedback.prototype.replyHtml = function (item) {
+    if (!item.reply) return '';
+    var title = item.status === 'open' ? '어니스트패밀리 답변' : '어니스트패밀리 완료 코멘트' + (item.done_at ? ' · ' + when(item.done_at) : '');
+    return '<div class="reply"><b>' + esc(title) + '</b>' + esc(item.reply) + '</div>';
+  };
+
+  Feedback.prototype.commentForm = function (item, mode) {
+    var self = this;
+    var card = this.card;
+    if (!card) return;
+    var acts = card.querySelector('.acts');
+    var form = el('form', 'cmt');
+    form.innerHTML =
+      '<textarea maxlength="2000" required placeholder="무엇을 고쳤는지 고객이 알아볼 말로 한 줄 적어 주세요. 예: 제목 글씨를 키웠어요"></textarea>' +
+      '<div class="acts"><button type="button" class="btn cancel">취소</button><button type="submit" class="btn pri">' + (mode === 'done' ? '완료로 표시' : '코멘트 저장') + '</button></div>';
+    if (acts) acts.parentNode.replaceChild(form, acts); else card.appendChild(form);
+    var ta = form.querySelector('textarea');
+    if (mode === 'edit') ta.value = item.reply || '';
+    this.positionCard();
+    setTimeout(function () { try { ta.focus({ preventScroll: true }); } catch (e) { ta.focus(); } }, 30);
+    form.querySelector('.cancel').addEventListener('click', function () { self.showCard(item.id); });
+    ta.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); submit(); }
+    });
+    form.addEventListener('submit', function (e) { e.preventDefault(); submit(); });
+
+    function submit() {
+      var comment = ta.value.trim();
+      if (!comment) { ta.focus(); return; }
+      var btn = form.querySelector('.btn.pri');
+      btn.disabled = true;
+      self.request('POST', '/' + item.id + '/' + (mode === 'done' ? 'done' : 'comment'), { comment: comment }).then(function (fresh) {
+        self.replace(fresh);
+        self.showCard(fresh.id);
+        self.toast(mode === 'done' ? '완료로 표시했어요. 고객 화면에 초록색으로 보여요' : '완료 코멘트를 고쳤어요');
+      }).catch(function () {
+        btn.disabled = false;
+        self.toast('저장하지 못했어요. 잠시 뒤 다시 눌러 주세요');
+      });
+    }
+  };
+
+  Feedback.prototype.askDelete = function (item) {
+    var self = this;
+    var card = this.card;
+    if (!card) return;
+    var acts = card.querySelector('.acts');
+    var box = el('div', 'askbox');
+    box.innerHTML =
+      '<p class="ask">#' + item.number + ' 피드백을 지울까요? 지우면 목록에서도 사라져요.</p>' +
+      '<div class="acts"><button type="button" class="btn cancel">취소</button><button type="button" class="btn danger yes">지우기</button></div>';
+    if (acts) acts.parentNode.replaceChild(box, acts); else card.appendChild(box);
+    this.positionCard();
+    box.querySelector('.cancel').addEventListener('click', function () { self.showCard(item.id); });
+    var yes = box.querySelector('.yes');
+    yes.addEventListener('click', function () {
+      yes.disabled = true;
+      var owner = !self.team && self.own[item.id] ? { 'X-HFFB-Owner': self.own[item.id] } : null;
+      self.request('DELETE', '/' + item.id, null, owner).then(function () {
+        self.items = self.items.filter(function (i) { return i.id !== item.id; });
+        if (self.own[item.id]) { delete self.own[item.id]; self.saveOwn(); }
+        self.closeCard();
+        self.renderCount();
+        self.renderPins();
+        if (self.panel) self.renderPanel();
+        self.toast('피드백 #' + item.number + '을 지웠어요');
+      }).catch(function () {
+        yes.disabled = false;
+        self.toast('지우지 못했어요. 잠시 뒤 다시 눌러 주세요');
+      });
+    });
+  };
+
+  Feedback.prototype.replace = function (fresh) {
+    for (var i = 0; i < this.items.length; i++) if (this.items[i].id === fresh.id) this.items[i] = fresh;
+    if (fresh.status !== 'open' && this.own[fresh.id]) {
+      delete this.own[fresh.id];
+      this.saveOwn();
+    }
+    this.renderCount();
+    if (this.panel) this.renderPanel();
   };
 
   Feedback.prototype.positionCard = function () {
@@ -948,11 +1098,9 @@
   Feedback.prototype.changeStatus = function (item, action) {
     var self = this;
     this.request('POST', '/' + item.id + '/' + action).then(function (fresh) {
-      for (var i = 0; i < self.items.length; i++) if (self.items[i].id === fresh.id) self.items[i] = fresh;
-      self.renderCount();
+      self.replace(fresh);
       self.showCard(fresh.id);
-      if (self.panel) self.renderPanel();
-      self.toast(action === 'confirm' ? '확인해 주셔서 고마워요' : '다시 고쳐 달라고 전했어요');
+      self.toast(action === 'confirm' ? '확인해 주셔서 고마워요' : self.team ? '다시 남은 것으로 돌렸어요' : '다시 고쳐 달라고 전했어요');
     }).catch(function () { self.toast('처리하지 못했어요. 잠시 뒤 다시 눌러 주세요'); });
   };
 
@@ -971,6 +1119,7 @@
   };
 
   Feedback.prototype.defaultTab = function () {
+    if (this.team) return 'open';
     return this.items.some(function (i) { return i.status === 'done'; }) ? 'done' : 'open';
   };
 
@@ -986,12 +1135,12 @@
     if (!this.tabChosen) this.tab = this.defaultTab();
     var counts = { open: 0, done: 0, confirmed: 0, all: this.items.length };
     this.items.forEach(function (i) { counts[i.status] = (counts[i.status] || 0) + 1; });
-    var tabs = [['open', '남은 것'], ['done', '완료 · 확인해 주세요'], ['confirmed', '확인 끝'], ['all', '전체']];
+    var tabs = [['open', '남은 것'], ['done', self.team ? '완료 · 고객 확인 대기' : '완료 · 확인해 주세요'], ['confirmed', self.team ? '고객 확인 끝' : '확인 끝'], ['all', '전체']];
     var list = this.items.filter(function (i) { return self.tab === 'all' || i.status === self.tab; })
       .slice().sort(function (a, b) { return b.number - a.number; });
     var here = normPath(location.pathname);
     panel.innerHTML =
-      '<div class="ph"><div class="t">피드백 ' + counts.all + '</div><button type="button" class="x" aria-label="닫기">' + ICON_X + '</button></div>' +
+      '<div class="ph"><div class="t">피드백 ' + counts.all + (self.team ? '<span class="team">우리 팀</span>' : '') + '</div><button type="button" class="x" aria-label="닫기">' + ICON_X + '</button></div>' +
       '<div class="tabs">' + tabs.map(function (t) {
         return '<button type="button" class="tab' + (t[0] === 'done' ? ' done-tab' : '') + (self.tab === t[0] ? ' on' : '') + '" data-tab="' + t[0] + '">' + t[1] + '<em>' + (counts[t[0]] || 0) + '</em></button>';
       }).join('') + '</div>' +
@@ -1000,9 +1149,9 @@
         var meta = [i.author_name, when(i.created_at), envChips(i.env).slice(0, 2).join(' · '), other ? '다른 화면' : ''].filter(Boolean).join(' · ');
         return '<button type="button" class="item" data-id="' + i.id + '"><span class="no ' + i.status + '">' + i.number + '</span>' +
           '<span class="tx"><span class="bd">' + esc(i.body) + '</span><span class="mt">' + esc(meta) + '</span></span>' +
-          '<span class="go">' + (i.status === 'done' ? '확인하기' : '보기') + '</span></button>';
+          '<span class="go">' + (i.status === 'done' && !self.team ? '확인하기' : '보기') + '</span></button>';
       }).join('') : '<div class="empty">' + (self.tab === 'done' ? '아직 완료된 피드백이 없어요.' : self.tab === 'open' ? '남은 피드백이 없어요.' : '피드백이 없어요.') + '</div>') + '</div>' +
-      '<div class="pf">' + (self.tab === 'confirmed' ? '확인 끝난 피드백은 화면에서 숨겨 둬요. 누르면 그 자리에 다시 보여요.' : '누르면 그 피드백을 남긴 자리로 바로 이동해요.') + '</div>';
+      '<div class="pf">' + (self.team ? '우리 팀 링크로 연 기기예요. 피드백을 눌러 완료 처리·코멘트·지우기를 할 수 있어요.' : self.tab === 'confirmed' ? '확인 끝난 피드백은 화면에서 숨겨 둬요. 누르면 그 자리에 다시 보여요.' : '누르면 그 피드백을 남긴 자리로 바로 이동해요.') + '</div>';
     panel.querySelector('.x').addEventListener('click', function () { self.closePanel(); });
     Array.prototype.forEach.call(panel.querySelectorAll('.tab'), function (b) {
       b.addEventListener('click', function () { self.tab = b.getAttribute('data-tab'); self.tabChosen = true; self.renderPanel(); });
@@ -1153,11 +1302,31 @@
     return store('local', 'hffb-invited') === '1';
   }
 
+  function takeLink(key) {
+    var src = location.search + '&' + location.hash;
+    if (/hffb=off/.test(src)) store('local', 'hffb-team:' + key, null);
+    var m = src.match(/hffbt=([A-Za-z0-9_-]{8,80})/);
+    if (!m) return false;
+    store('local', 'hffb-team:' + key, m[1]);
+    store('local', 'hffb-invited', '1');
+    try {
+      history.replaceState(history.state, '', location.href.replace(/([?#&])hffbt=[A-Za-z0-9_-]+&?/, '$1').replace(/[?#&]$/, ''));
+    } catch (e) {}
+    return true;
+  }
+
   window.HFFeedback = {
     init: function (opts) {
       if (instance || !opts || !opts.key) return instance;
+      window.addEventListener('hashchange', function () {
+        if (instance && takeLink(opts.key)) {
+          instance.teamKey = store('local', 'hffb-team:' + opts.key);
+          instance.load();
+        }
+      });
       var start = function () {
         if (instance) return;
+        takeLink(opts.key);
         if (!invited(opts)) {
           if (!waitingForInvite) {
             waitingForInvite = true;
@@ -1172,7 +1341,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.2.0'
+    version: '1.3.0'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
