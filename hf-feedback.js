@@ -1187,21 +1187,22 @@
     if (this.team) {
       if (st === 'open') {
         guide = item.reopened
-          ? '<p class="box re">고객이 재수정을 요청했어요. 마지막 댓글을 보고 고친 뒤 다시 완료로 표시해 주세요.</p>'
-          : '<p class="wait">고친 뒤 무엇을 고쳤는지 적고 완료로 표시를 누르세요. 고객 화면에 초록색으로 바뀌고, 고객이 재수정 요청이나 최종 검수 완료를 고릅니다.</p>';
-        placeholder = '무엇을 고쳤는지 고객이 알아볼 말로 적어 주세요. 예: 제목 글씨를 키웠어요';
-        acts.push('<button type="button" class="btn send">댓글만 남기기</button>', '<button type="button" class="btn pri send" data-act="done">완료로 표시</button>');
+          ? '<p class="box re">고객이 재수정을 요청했어요. 마지막 댓글을 보고 고친 뒤 화면에서 확인하고 완료를 눌러 주세요.</p>'
+          : '<p class="wait">고친 뒤 이 화면에서 확인하고 완료를 누르세요. 고객에게 할 말은 댓글로 남기면 고객 화면에 보여요.</p>';
+        placeholder = '고객에게 남길 말을 적어 주세요. 예: 제목 글씨를 키웠어요';
+        acts.push('<button type="button" class="btn send">댓글만 남기기</button>', '<button type="button" class="btn okb send" data-act="confirm">완료</button>');
       } else {
         guide = st === 'done'
-          ? '<p class="box">고객이 확인하는 중이에요. 고객이 재수정 요청이나 최종 검수 완료를 고릅니다.</p>'
-          : '<p class="box gray">고객이 최종 검수 완료했어요.</p>';
+          ? '<p class="box">고객이 확인하는 중이에요. 여기서 확인했으면 완료를 눌러도 돼요.</p>'
+          : '<p class="box gray">최종 검수 완료된 피드백이에요.</p>';
         placeholder = '고객에게 남길 말을 적어 주세요';
-        acts.push('<button type="button" class="btn send" data-act="reopen">다시 열기</button>', '<button type="button" class="btn pri send">댓글 남기기</button>');
+        acts.push('<button type="button" class="btn send" data-act="reopen">다시 열기</button>', '<button type="button" class="btn send">댓글 남기기</button>');
+        if (st === 'done') acts.push('<button type="button" class="btn okb send" data-act="confirm">완료</button>');
       }
     } else if (st === 'open') {
-      guide = '<p class="wait">' + (item.reopened ? '재수정을 요청했어요. 고치면 다시 초록색으로 바뀌어요.' : '어니스트패밀리가 보고 고치는 중이에요. 고치면 초록색으로 바뀌어요.') + '</p>';
-      placeholder = '더 알려 줄 내용이 있으면 적어 주세요';
-      acts.push('<button type="button" class="btn pri send">댓글 남기기</button>');
+      guide = '<p class="wait">' + (item.reopened ? '재수정을 요청했어요. 고쳐진 걸 화면에서 확인했으면 완료를 눌러 주세요.' : '고쳐진 걸 화면에서 확인했으면 완료를 눌러 주세요. 더 알려 줄 내용은 댓글로 남겨 주세요.') + '</p>';
+      placeholder = '더 알려 줄 내용이 있으면 적어 주세요 (사진·영상 첨부 가능)';
+      acts.push('<button type="button" class="btn send">댓글 남기기</button>', '<button type="button" class="btn okb send" data-act="confirm">완료</button>');
     } else if (st === 'done') {
       guide = '<p class="box">수정했어요. 화면을 확인하고 아래에서 골라 주세요.</p>';
       placeholder = '아직 안 된 점이 있으면 적어 주세요 (사진·영상 첨부 가능)';
@@ -1239,7 +1240,7 @@
     ta.addEventListener('keydown', function (e) {
       if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
       e.preventDefault();
-      var pri = form.querySelector('.btn.pri');
+      var pri = form.querySelector('.btn.pri') || form.querySelector('.send:not([data-act])');
       if (pri) pri.click();
     });
     Array.prototype.forEach.call(form.querySelectorAll('.send'), function (b) {
@@ -1295,7 +1296,7 @@
       self.replace(fresh);
       self.showCard(fresh.id);
       self.toast(action === 'done' ? '완료로 표시했어요. 고객 화면에 초록색으로 보여요'
-        : action === 'confirm' ? '최종 검수 완료했어요. 고마워요'
+        : action === 'confirm' ? '완료했어요. 최종 검수 완료로 옮겼어요'
         : action === 'reopen' ? (self.team ? '다시 남은 것으로 돌렸어요' : '재수정을 요청했어요')
         : '댓글을 남겼어요');
     }).catch(function (j) {
@@ -1420,7 +1421,7 @@
           '<span class="tx"><span class="bd">' + (i.reopened ? '<span class="rb">재수정 요청</span>' : '') + esc(i.body) + '</span><span class="mt">' + esc(meta) + '</span></span>' +
           '<span class="go">' + (i.status === 'done' && !self.team ? '확인하기' : '보기') + '</span></button>';
       }).join('') : '<div class="empty">' + (self.tab === 'done' ? '아직 수정 완료된 피드백이 없어요.' : self.tab === 'open' ? '남은 피드백이 없어요.' : '피드백이 없어요.') + '</div>') + '</div>' +
-      '<div class="pf">' + (self.team ? '우리 팀 링크로 연 기기예요. 피드백을 눌러 댓글·완료로 표시·지우기를 할 수 있어요.' : self.tab === 'done' ? '눌러서 그 자리를 확인하고 최종 검수 완료나 재수정 요청을 골라 주세요.' : self.tab === 'confirmed' ? '최종 검수 완료된 피드백은 화면에서 숨겨 둬요. 누르면 그 자리에 다시 보여요.' : '누르면 그 피드백을 남긴 자리로 바로 이동해요.') + '</div>';
+      '<div class="pf">' + (self.team ? '우리 팀 링크로 연 기기예요. 피드백을 눌러 댓글·완료·다시 열기·지우기를 할 수 있어요.' : self.tab === 'done' ? '눌러서 그 자리를 확인하고 최종 검수 완료나 재수정 요청을 골라 주세요.' : self.tab === 'confirmed' ? '최종 검수 완료된 피드백은 화면에서 숨겨 둬요. 누르면 그 자리에 다시 보여요.' : '누르면 그 자리로 이동해요. 고쳐진 걸 확인했으면 완료를 눌러 주세요.') + '</div>';
     panel.querySelector('.x').addEventListener('click', function () { self.closePanel(); });
     Array.prototype.forEach.call(panel.querySelectorAll('.tab'), function (b) {
       b.addEventListener('click', function () { self.tab = b.getAttribute('data-tab'); self.tabChosen = true; self.renderPanel(); });
@@ -1610,7 +1611,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.4.0'
+    version: '1.5.0'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
