@@ -294,12 +294,21 @@
     return a === b || a.indexOf(b.slice(0, 12)) === 0 || b.indexOf(a.slice(0, 12)) === 0;
   }
 
+  function shortText(t) {
+    t = String(t || '').replace(/\s+/g, ' ').trim();
+    return t.length > 0 && t.length <= 60;
+  }
+
   function findAnchor(item) {
     var hit = null;
+    var edited = null;
     if (item.selector) {
       try { hit = document.querySelector(item.selector); } catch (e) { hit = null; }
       if (hit && item.anchor_tag && hit.tagName.toLowerCase() !== item.anchor_tag) hit = null;
-      if (hit && item.anchor_text && !similar(textOf(hit), item.anchor_text)) hit = null;
+      if (hit && item.anchor_text && !similar(textOf(hit), item.anchor_text)) {
+        if (shortText(textOf(hit)) && shortText(item.anchor_text)) edited = hit;
+        hit = null;
+      }
     }
     if (!hit && item.anchor_tag && item.anchor_text) {
       var all = document.getElementsByTagName(item.anchor_tag);
@@ -313,7 +322,8 @@
       }
       hit = best;
     }
-    return hit;
+    item._edited = !hit && edited ? textOf(edited) : null;
+    return hit || edited;
   }
 
   function detectEnv() {
@@ -1072,7 +1082,7 @@
   };
 
   Feedback.prototype.pointOf = function (item) {
-    var a = item._el && item._el.isConnected ? item._el : null;
+    var a = item._el && item._el.isConnected && !item._edited ? item._el : null;
     if (!a) {
       a = findAnchor(item);
       item._el = a;
@@ -1088,6 +1098,18 @@
 
   Feedback.prototype.lost = function (item) {
     return this.here(item) && !this.pointOf(item);
+  };
+
+  Feedback.prototype.edited = function (item) {
+    return this.here(item) && !!this.pointOf(item) && !!item._edited;
+  };
+
+  Feedback.prototype.editedNote = function (item) {
+    var cut = function (t) {
+      t = String(t || '').replace(/\s+/g, ' ').trim();
+      return t.length > 40 ? t.slice(0, 40) + '…' : t;
+    };
+    return '<p class="box gray">남길 때와 글이 바뀐 자리예요. 고친 내용이 맞는지 확인해 주세요.<br>남길 때 ‘' + esc(cut(item.anchor_text)) + '’<br>지금 ‘' + esc(cut(item._edited)) + '’</p>';
   };
 
   Feedback.prototype.occluded = function (pt) {
@@ -1327,7 +1349,7 @@
       filesHtml(item.files) +
       '<div class="meta">' + esc([item.author_name, when(item.created_at), item.anchor_label].filter(Boolean).join(' · ')) + '</div>' +
       '<div class="env">' + chips + '</div>' +
-      (this.lost(item) ? '<p class="box gray">이 피드백을 남긴 자리가 지금 화면에 보이지 않아요. 그 내용이 있는 탭이나 접힌 곳을 열면 핀이 다시 나타나요.</p>' : '') +
+      (this.lost(item) ? '<p class="box gray">이 피드백을 남긴 자리가 지금 화면에 보이지 않아요. 그 내용이 있는 탭이나 접힌 곳을 열면 핀이 다시 나타나요.</p>' : this.edited(item) ? this.editedNote(item) : '') +
       this.threadHtml(item) +
       guide +
       '<form class="reply-ta"><textarea maxlength="2000" placeholder="' + esc(placeholder) + '"></textarea><div class="att"></div><div class="me"></div>' +
@@ -1527,8 +1549,9 @@
         var fileCount = (i.files || []).length + comments.reduce(function (n, c) { return n + (c.files || []).length; }, 0);
         var meta = [i.author_name, when(i.created_at), comments.length ? '댓글 ' + comments.length : '', fileCount ? '파일 ' + fileCount : '', envChips(i.env).slice(0, 2).join(' · '), other ? '다른 화면' : ''].filter(Boolean).join(' · ');
         var gone = !other && self.lost(i);
+        var changed = !other && !gone && self.edited(i);
         return '<button type="button" class="item" data-id="' + i.id + '"><span class="no ' + i.status + '">' + i.number + '</span>' +
-          '<span class="tx"><span class="bd">' + (i.reopened ? '<span class="rb">재수정 요청</span>' : '') + (gone ? '<span class="rb gone">자리 안 보임</span>' : '') + esc(i.body) + '</span><span class="mt">' + esc(meta) + '</span></span>' +
+          '<span class="tx"><span class="bd">' + (i.reopened ? '<span class="rb">재수정 요청</span>' : '') + (gone ? '<span class="rb gone">자리 안 보임</span>' : '') + (changed ? '<span class="rb gone">글 바뀜</span>' : '') + esc(i.body) + '</span><span class="mt">' + esc(meta) + '</span></span>' +
           '<span class="go">' + (i.status === 'done' && !self.team ? '확인하기' : '보기') + '</span></button>';
       }).join('') : '<div class="empty">' + (self.tab === 'done' ? '아직 수정 완료된 피드백이 없어요.' : self.tab === 'open' ? '남은 피드백이 없어요.' : '피드백이 없어요.') + '</div>') + '</div>' +
       '<div class="pf">' + (self.team ? '우리 팀 링크로 연 기기예요. 피드백을 눌러 댓글·완료·다시 열기·지우기를 할 수 있어요.' : self.tab === 'done' ? '눌러서 그 자리를 확인하고 최종 검수 완료나 재수정 요청을 골라 주세요.' : self.tab === 'confirmed' ? '최종 검수 완료된 피드백은 화면에서 숨겨 둬요. 누르면 그 자리에 다시 보여요.' : '누르면 그 자리로 이동해요. 고쳐진 걸 확인했으면 완료를 눌러 주세요.') + '</div>';
@@ -1721,7 +1744,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.6.0'
+    version: '1.6.1'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
