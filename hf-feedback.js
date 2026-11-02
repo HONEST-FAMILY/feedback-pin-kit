@@ -1259,14 +1259,26 @@
       };
       var step = function () {
         while (i < tabs.length) {
-          var btn = tabButton(tabs[i++]);
-          if (btn) {
-            btn.click();
-            waitFor(found, 1500).then(function (ok) { if (ok) resolve(true); else next(); });
+          var pick = tabs[i++];
+          if (tabButton(pick)) {
+            press(pick, 0);
             return;
           }
         }
         resolve(found());
+      };
+      var press = function (pick, tries) {
+        var btn = tabButton(pick);
+        if (!btn) {
+          waitFor(found, 1500).then(function (ok) { if (ok) resolve(true); else next(); });
+          return;
+        }
+        btn.click();
+        waitFor(function () { return found() || !tabButton(pick); }, 1200).then(function () {
+          if (found()) resolve(true);
+          else if (tabButton(pick) && tries < 5) press(pick, tries + 1);
+          else waitFor(found, 1500).then(function (ok) { if (ok) resolve(true); else next(); });
+        });
       };
       next();
     });
@@ -1936,7 +1948,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.6.3'
+    version: '1.6.4'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
