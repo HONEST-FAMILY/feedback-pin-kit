@@ -60,6 +60,10 @@
     '.hint b{color:#9ec0ff;font-weight:700}',
     '.hint button{width:24px;height:24px;border-radius:999px;display:inline-grid;place-items:center;color:#cbd5e1}',
     '.on-mode .hint.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}',
+    '.cursor-hint{position:absolute;left:0;top:0;padding:10px 14px;border:1px solid rgba(255,255,255,.2);border-radius:12px;background:#111827;color:#fff;font-size:14px;font-weight:700;line-height:1.5;white-space:nowrap;box-shadow:0 10px 28px -8px rgba(0,0,0,.5);pointer-events:none;visibility:hidden;z-index:5}',
+    '.cursor-hint.show{visibility:visible}',
+    '.cursor-hint b{color:#9ec0ff}',
+    '@media(max-width:640px){.cursor-hint{display:none}}',
     '.hover{position:absolute;left:0;top:0;width:0;height:0;border:2px solid var(--c);background:var(--soft);border-radius:6px;opacity:0;pointer-events:none;transition:left .08s,top .08s,width .08s,height .08s,opacity .12s;z-index:2}',
     '.hover.show{opacity:1}',
     '.tag{position:absolute;left:0;top:0;max-width:280px;padding:3px 8px;border-radius:6px;background:var(--c);color:#fff;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;pointer-events:none;transition:opacity .12s;z-index:2}',
@@ -570,6 +574,9 @@
     this.teamKey = store('local', 'hffb-team:' + this.key) || null;
     this.team = false;
     this.own = readOwn(this.key);
+    this.cursorHintEnabled = !!opts.cursorHint;
+    this.hasPosted = store('local', 'hffb-posted:' + this.key) === '1' || Object.keys(this.own).length > 0;
+    if (this.cursorHintEnabled && this.hasPosted) store('local', 'hffb-posted:' + this.key, '1');
     this.name = savedName();
     if (this.name) saveName(this.name);
     this.items = [];
@@ -622,6 +629,7 @@
     root.innerHTML =
       '<div class="frame"></div>' +
       '<div class="hint"><span></span><button type="button" aria-label="안내 닫기">' + ICON_X + '</button></div>' +
+      '<div class="cursor-hint" aria-hidden="true"><b>마우스 오른쪽 클릭</b>으로 피드백을 남겨 주세요</div>' +
       '<div class="hover"></div><div class="tag"></div>' +
       '<svg class="spot" aria-hidden="true"><path class="sh" fill-rule="evenodd"></path><path class="rg"></path></svg>' +
       '<div class="pins"></div>' +
@@ -638,6 +646,7 @@
     this.q = function (s) { return root.querySelector(s); };
     this.ui = {
       hint: this.q('.hint'), hintText: this.q('.hint span'), hover: this.q('.hover'), tag: this.q('.tag'),
+      cursorHint: this.q('.cursor-hint'),
       pins: this.q('.pins'), press: this.q('.press'), tg: this.q('.tg'), tgLabel: this.q('.tg .lb'),
       bar: this.q('.bar'), ls: this.q('.ls'), lsN: this.q('.ls .n'), toast: this.q('.toast'), spot: this.q('.spot'),
       spotSh: this.q('.spot .sh'), spotRg: this.q('.spot .rg'), dropzone: this.q('.dropzone')
@@ -660,12 +669,21 @@
     });
 
     document.addEventListener('pointermove', function (e) {
-      if (!self.on || e.pointerType !== 'mouse' || self.composing) return;
-      if (self.isOurs(e)) { self.showHover(null); return; }
-      self.showHover(self.pick(e.clientX, e.clientY));
+      if (!self.on || e.pointerType !== 'mouse' || self.composing) { self.showCursorHint(null); return; }
+      if (self.isOurs(e)) { self.showHover(null); self.showCursorHint(null); return; }
+      var target = self.pick(e.clientX, e.clientY);
+      self.showHover(target);
+      self.showCursorHint(target ? { x: e.clientX, y: e.clientY } : null);
     }, true);
 
-    document.addEventListener('mouseleave', function () { if (!self.composing) self.showHover(null); });
+    document.addEventListener('mouseleave', function () { if (!self.composing) self.showHover(null); self.showCursorHint(null); });
+    window.addEventListener('blur', function () { self.showCursorHint(null); });
+    window.addEventListener('storage', function (e) {
+      if (e.key === 'hffb-posted:' + self.key && e.newValue === '1') {
+        self.hasPosted = true;
+        self.showCursorHint(null);
+      }
+    });
 
     document.addEventListener('contextmenu', function (e) {
       if (!self.on || self.isOurs(e)) return;
@@ -683,6 +701,7 @@
 
     document.addEventListener('pointerdown', function (e) {
       if (!self.on || e.pointerType === 'mouse' || self.isOurs(e)) return;
+      self.showCursorHint(null);
       self.startPress(e);
     }, true);
     document.addEventListener('pointermove', function (e) {
@@ -717,6 +736,7 @@
 
     window.addEventListener('scroll', function () { self.schedule(); }, true);
     window.addEventListener('resize', function () {
+      self.showCursorHint(null);
       self.env.viewport_w = window.innerWidth;
       self.env.viewport_h = window.innerHeight;
       self.env.layout = window.innerWidth <= MOBILE_MAX ? 'mobile' : window.innerWidth <= 1024 ? 'tablet' : 'pc';
@@ -873,6 +893,23 @@
     return n;
   };
 
+  Feedback.prototype.showCursorHint = function (point) {
+    var hint = this.ui.cursorHint;
+    if (!point || !this.cursorHintEnabled || !this.on || this.hasPosted || isMobileWidth() || this.composing || this.nameBox || this.openCard || this.panel) {
+      hint.classList.remove('show');
+      return;
+    }
+    var w = hint.offsetWidth;
+    var h = hint.offsetHeight;
+    var left = point.x + 18;
+    var top = point.y + 24;
+    if (left + w > viewW() - 12) left = point.x - w - 18;
+    if (top + h > window.innerHeight - 12) top = point.y - h - 18;
+    hint.style.left = clamp(left, 12, Math.max(12, viewW() - w - 12)) + 'px';
+    hint.style.top = clamp(top, 12, Math.max(12, window.innerHeight - h - 12)) + 'px';
+    hint.classList.add('show');
+  };
+
   Feedback.prototype.showHover = function (n) {
     var ui = this.ui;
     this.hoverEl = n;
@@ -948,6 +985,7 @@
 
   Feedback.prototype.applyMode = function () {
     var ui = this.ui;
+    if (!this.on) this.showCursorHint(null);
     document.documentElement.classList.toggle('hffb-on', this.on);
     this.root.classList.toggle('on-mode', this.on);
     ui.tg.classList.toggle('on', this.on);
@@ -1004,6 +1042,7 @@
   Feedback.prototype.askName = function () {
     var self = this;
     if (this.nameBox) return;
+    this.showCursorHint(null);
     var changing = !!this.name;
     var wrap = el('div', 'namebg');
     wrap.innerHTML =
@@ -1369,6 +1408,7 @@
 
   Feedback.prototype.compose = function (target, x, y) {
     var self = this;
+    this.showCursorHint(null);
     this.closeComposer();
     this.closeCard();
     this.showHover(target);
@@ -1446,6 +1486,9 @@
         files: box.tokens()
       };
       self.request('POST', '', payload).then(function (item) {
+        self.hasPosted = true;
+        if (self.cursorHintEnabled) store('local', 'hffb-posted:' + self.key, '1');
+        self.showCursorHint(null);
         if (item.owner_token) {
           self.own[item.id] = item.owner_token;
           self.saveOwn();
@@ -1487,6 +1530,7 @@
     var self = this;
     var item = this.byId(id);
     if (!item) return;
+    this.showCursorHint(null);
     this.closeComposer();
     this.closeCard();
     this.openCard = item.id;
@@ -1690,6 +1734,7 @@
 
   Feedback.prototype.openPanel = function () {
     var self = this;
+    this.showCursorHint(null);
     if (this.panel) { this.closePanel(); return; }
     this.hideNudge();
     var panel = el('div', 'panel' + (isMobileWidth() ? ' sheet' : ''));
@@ -1948,7 +1993,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.6.4'
+    version: '1.6.5'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
@@ -1957,6 +2002,7 @@
       api: SCRIPT.dataset.api,
       top: SCRIPT.dataset.top,
       hide: SCRIPT.dataset.hide,
+      cursorHint: SCRIPT.hasAttribute('data-cursor-hint') && !/^(false|0|off)$/i.test(SCRIPT.dataset.cursorHint),
       invite: SCRIPT.hasAttribute('data-invite') && !/^(false|0|off)$/i.test(SCRIPT.dataset.invite)
     });
   }
