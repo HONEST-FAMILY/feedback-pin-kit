@@ -159,6 +159,16 @@
     '.del:hover{color:#dc2626;background:#fef2f2}',
     '.btn.danger{background:#dc2626;border-color:#dc2626;color:#fff}',
     '.team{display:inline-flex;align-items:center;height:20px;padding:0 7px;margin-left:6px;border-radius:999px;background:#111827;color:#fff;font-size:11px;font-weight:800;vertical-align:2px}',
+    '.me{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--muted)}',
+    '.me b{color:#111827;font-weight:800}',
+    '.me input{margin-top:0}',
+    '.chg{height:22px;padding:0 8px;border-radius:999px;background:#f3f4f6;color:#4b5563;font-size:11.5px;font-weight:700}',
+    '.chg:hover{background:#e5e7eb;color:#111827}',
+    '.namebg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.45);pointer-events:auto;z-index:11;animation:in .18s ease both}',
+    '.namecard{width:360px;max-width:100%;padding:20px 18px 16px;border-radius:18px;background:#fff;box-shadow:0 24px 60px -18px rgba(15,23,42,.6),0 0 0 1px rgba(15,23,42,.08)}',
+    '.namecard .t{font-weight:800;font-size:17px;color:#111827}',
+    '.namecard p{margin:6px 0 12px;color:var(--muted);font-size:13px}',
+    '.namecard input{margin-top:0;height:42px;font-size:15px}',
     '.panel{position:absolute;right:12px;top:calc(var(--top,16px) + 54px);bottom:12px;width:380px;max-width:calc(100% - 24px);display:flex;flex-direction:column;border-radius:18px;background:#fff;box-shadow:0 24px 60px -18px rgba(15,23,42,.5),0 0 0 1px rgba(15,23,42,.08);pointer-events:auto;z-index:8;animation:in .2s cubic-bezier(.2,.8,.2,1) both;overflow:hidden}',
     '.panel .ph{display:flex;align-items:center;gap:8px;padding:14px 14px 8px}',
     '.panel .ph .t{flex:1;font-weight:800;font-size:16px}',
@@ -189,7 +199,7 @@
     '.panel.sheet{top:auto!important;height:min(78vh,620px);bottom:0;right:0;left:0;width:auto;max-width:none;border-radius:18px 18px 0 0}',
     '@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}',
     '@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(17,24,39,.45),0 0 0 2px #fff}100%{box-shadow:0 0 0 14px rgba(17,24,39,0),0 0 0 2px #fff}}',
-    '@media (max-width:640px){.toast{bottom:84px}.bar{right:10px}.tg{height:40px;padding:0 12px 0 10px;font-size:13px}.ls{height:40px;padding:0 12px;font-size:13px}.hint{top:auto;bottom:16px;transform:translate(-50%,8px)}.on-mode .hint.show{transform:translate(-50%,0)}.nudge{right:10px}}',
+    '@media (max-width:640px){.namebg{align-items:flex-start;padding-top:72px}.toast{bottom:84px}.bar{right:10px}.tg{height:40px;padding:0 12px 0 10px;font-size:13px}.ls{height:40px;padding:0 12px;font-size:13px}.hint{top:auto;bottom:16px;transform:translate(-50%,8px)}.on-mode .hint.show{transform:translate(-50%,0)}.nudge{right:10px}}',
     '@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}'
   ].join('\n');
 
@@ -218,6 +228,15 @@
   }
 
   function rememberedMode() {
+  function savedName() {
+    return String(store('session', 'hffb-name') || store('local', 'hffb-name') || '').trim().slice(0, 40);
+  }
+
+  function saveName(name) {
+    store('session', 'hffb-name', name || null);
+    store('local', 'hffb-name', name || null);
+  }
+
     var since = parseInt(store('session', 'hffb-on'), 10);
     return since > 0 && Date.now() - since < MODE_KEEP_MS;
   }
@@ -425,6 +444,8 @@
     this.own = readOwn(this.key);
     this.items = [];
     this.on = rememberedMode();
+    this.name = savedName();
+    if (this.name) saveName(this.name);
     this.tab = null;
     this.env = detectEnv();
     this.hoverEl = null;
@@ -555,7 +576,8 @@
 
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
-      if (self.composing) self.closeComposer();
+      if (self.nameBox) self.closeName(true);
+      else if (self.composing) self.closeComposer();
       else if (self.openCard) self.closeCard();
       else if (self.panel) self.closePanel();
       else if (self.on) self.setMode(false);
@@ -839,13 +861,91 @@
         self.renderPins();
         if (self.panel) self.renderPanel();
         self.focusFromHash();
-        self.showNudge();
+        if (!self.greet()) self.showNudge();
       })
       .catch(function () {});
   };
 
   Feedback.prototype.disable = function (status) {
     this.on = false;
+  Feedback.prototype.greet = function () {
+    if (this.name || this.greeted || store('session', 'hffb-name-later')) return false;
+    this.greeted = true;
+    this.askName();
+    return true;
+  };
+
+  Feedback.prototype.askName = function () {
+    var self = this;
+    if (this.nameBox) return;
+    var changing = !!this.name;
+    var wrap = el('div', 'namebg');
+    wrap.innerHTML =
+      '<form class="namecard" role="dialog" aria-modal="true" aria-label="담당자 이름">' +
+      '<div class="t">담당자님 이름을 입력해주세요</div>' +
+      '<p>남기시는 피드백과 댓글에 이 이름으로 표시돼요.</p>' +
+      '<input name="who" maxlength="40" autocomplete="name" placeholder="이름" value="' + esc(this.name) + '">' +
+      '<div class="acts"><button type="button" class="btn later">' + (changing ? '취소' : '나중에') + '</button><button type="submit" class="btn pri">확인</button></div>' +
+      '</form>';
+    this.root.appendChild(wrap);
+    this.nameBox = wrap;
+    var input = wrap.querySelector('input');
+    setTimeout(function () { try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); } }, 30);
+    wrap.querySelector('.later').addEventListener('click', function () { self.closeName(true); });
+    wrap.querySelector('form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var value = input.value.trim().slice(0, 40);
+      if (!value) {
+        input.focus();
+        self.toast('담당자님 이름을 입력해주세요');
+        return;
+      }
+      self.setName(value);
+      self.closeName(false);
+      self.toast(value + '님 이름으로 남겨요');
+    });
+  };
+
+  Feedback.prototype.closeName = function (skipped) {
+    if (!this.nameBox) return;
+    if (this.nameBox.parentNode) this.nameBox.parentNode.removeChild(this.nameBox);
+    this.nameBox = null;
+    if (skipped && !this.name) store('session', 'hffb-name-later', '1');
+    this.showNudge();
+  };
+
+  Feedback.prototype.setName = function (name) {
+    this.name = name;
+    saveName(name);
+    store('session', 'hffb-name-later', null);
+    if (this.composing) this.renderWho(this.composing.card.querySelector('.me'));
+    if (this.card) this.renderWho(this.card.querySelector('.me'));
+  };
+
+  Feedback.prototype.renderWho = function (box) {
+    var self = this;
+    if (!box) return;
+    if (!this.name) {
+      box.innerHTML = '<input name="author" maxlength="40" placeholder="담당자님 이름을 입력해주세요" autocomplete="name">';
+      return;
+    }
+    box.innerHTML = '<span><b>' + esc(this.name) + '</b>님 이름으로 남겨요</span><button type="button" class="chg">바꾸기</button>';
+    box.querySelector('.chg').addEventListener('click', function () { self.askName(); });
+  };
+
+  Feedback.prototype.takeName = function (form) {
+    var input = form.querySelector('.me input');
+    if (!input) return this.name;
+    var value = input.value.trim().slice(0, 40);
+    if (!value) {
+      input.focus();
+      this.toast('담당자님 이름을 입력해주세요');
+      return null;
+    }
+    this.setName(value);
+    return value;
+  };
+
     document.documentElement.classList.remove('hffb-on');
     if (this.host.parentNode) this.host.parentNode.removeChild(this.host);
     var global = document.getElementById('hffb-global');
@@ -1072,7 +1172,6 @@
     draft.style.top = Math.round(y) + 'px';
     this.ui.pins.appendChild(draft);
 
-    var name = store('local', 'hffb-name') || '';
     var chips = envChips(this.env).map(function (c) { return '<span class="chip">' + esc(c) + '</span>'; }).join('');
     var card = el('form', 'composer');
     card.setAttribute('role', 'dialog');
@@ -1081,7 +1180,7 @@
       '<div class="hd"><div class="t">새 피드백<small>' + esc(describe(target)) + '</small></div><button type="button" class="x" aria-label="닫기">' + ICON_X + '</button></div>' +
       '<textarea name="body" maxlength="2000" placeholder="무엇이 달라지면 좋을지 적어 주세요" required></textarea>' +
       '<div class="att"></div>' +
-      (name ? '' : '<input name="author" maxlength="40" placeholder="이름 (선택)" autocomplete="name">') +
+      '<div class="me"></div>' +
       '<div class="env">' + chips + '</div>' +
       '<p class="envnote">보고 계신 기기·브라우저·화면 크기가 함께 저장돼요.</p>' +
       '<div class="acts"><button type="button" class="btn cancel">취소</button><button type="submit" class="btn pri">남기기</button></div>';
@@ -1092,6 +1191,7 @@
     var box = this.attachBox(card.querySelector('.att'));
     this.pasteInto(ta, box);
     this.dropBox = box;
+    this.renderWho(card.querySelector('.me'));
 
     var onVV = function () { if (card.classList.contains('sheet')) self.fitSheet(card); };
     if (window.visualViewport) window.visualViewport.addEventListener('resize', onVV);
@@ -1110,16 +1210,15 @@
       if (!body) { ta.focus(); return; }
       if (box.busy()) { self.toast('파일을 올리는 중이에요. 다 올라가면 다시 눌러 주세요'); return; }
       if (box.failed()) { self.toast('올리지 못한 파일이 있어요. 빼거나 다시 올려 주세요'); return; }
-      var authorInput = card.querySelector('input[name=author]');
-      var author = authorInput ? authorInput.value.trim() : name;
-      if (authorInput && author) store('local', 'hffb-name', author);
+      var author = self.takeName(card);
+      if (!author) return;
       var btn = card.querySelector('.btn.pri');
       btn.disabled = true;
       btn.textContent = '남기는 중…';
       var rect = target.getBoundingClientRect();
       var payload = {
         body: body,
-        author_name: author || null,
+        author_name: author,
         page_url: location.href.split('#')[0],
         page_path: location.pathname,
         selector: selectorFor(target),
@@ -1224,7 +1323,7 @@
       '<div class="env">' + chips + '</div>' +
       this.threadHtml(item) +
       guide +
-      '<form class="reply-ta"><textarea maxlength="2000" placeholder="' + esc(placeholder) + '"></textarea><div class="att"></div>' +
+      '<form class="reply-ta"><textarea maxlength="2000" placeholder="' + esc(placeholder) + '"></textarea><div class="att"></div><div class="me"></div>' +
       '<div class="acts">' + del + acts.join('') + '</div></form>';
     this.root.appendChild(card);
     this.card = card;
@@ -1235,6 +1334,7 @@
     var box = this.attachBox(form.querySelector('.att'));
     this.cardBox = box;
     this.dropBox = box;
+    this.renderWho(card.querySelector('.me'));
     this.pasteInto(ta, box);
     form.addEventListener('submit', function (e) { e.preventDefault(); });
     ta.addEventListener('keydown', function (e) {
@@ -1259,7 +1359,8 @@
     return '<div class="thread">' + item.comments.map(function (c) {
       var team = c.author === 'team';
       var label = c.action === 'done' ? '수정 완료' : c.action === 'confirm' ? '최종 검수 완료' : c.action === 'reopen' ? (team ? '다시 열기' : '재수정 요청') : '';
-      return '<div class="msg' + (team ? ' tm' : '') + '"><div class="who"><b>' + esc(team ? '어니스트패밀리' : (c.author_name || '고객')) + '</b><span>' + esc(when(c.created_at)) + '</span>' +
+      var who = team ? '어니스트패밀리' + (c.author_name ? ' · ' + c.author_name : '') : (c.author_name || '고객');
+      return '<div class="msg' + (team ? ' tm' : '') + '"><div class="who"><b>' + esc(who) + '</b><span>' + esc(when(c.created_at)) + '</span>' +
         (label ? '<span class="ab ' + c.action + '">' + label + '</span>' : '') + '</div>' +
         (c.body ? '<p class="body">' + esc(c.body) + '</p>' : '') + filesHtml(c.files) + '</div>';
     }).join('') + '</div>';
@@ -1289,11 +1390,12 @@
     }
     var buttons = form.querySelectorAll('.send');
     Array.prototype.forEach.call(buttons, function (b) { b.disabled = true; });
-    var payload = { comment: comment || null, action: action || null, files: files };
-    if (!this.team) payload.author_name = store('local', 'hffb-name') || null;
+    var payload = { comment: comment || null, action: action || null, files: files, author_name: author };
     this.request('POST', '/' + item.id + '/comments', payload).then(function (fresh) {
       box.destroy();
       self.replace(fresh);
+    var author = this.takeName(form);
+    if (!author) return;
       self.showCard(fresh.id);
       self.toast(action === 'done' ? '완료로 표시했어요. 고객 화면에 초록색으로 보여요'
         : action === 'confirm' ? '완료했어요. 최종 검수 완료로 옮겼어요'
@@ -1611,7 +1713,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.5.0'
+    version: '1.6.0'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
