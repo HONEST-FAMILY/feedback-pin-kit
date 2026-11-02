@@ -299,12 +299,63 @@
     return t.length > 0 && t.length <= 60;
   }
 
+  function spacedText(node) {
+    var out = [];
+    var walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null);
+    for (var t = walker.nextNode(); t; t = walker.nextNode()) {
+      var s = t.data.replace(/\s+/g, ' ').trim();
+      if (s) out.push(s);
+    }
+    return out.join(' ');
+  }
+
+  function rowOf(n) {
+    var own = textOf(n);
+    for (var p = n.parentElement, i = 0; p && p !== document.body && i < 6; p = p.parentElement, i++) {
+      if (spacedText(p).length > own.length + 1) return p;
+    }
+    return null;
+  }
+
+  function repeated(n) {
+    var own = textOf(n);
+    if (!own) return false;
+    var all = document.getElementsByTagName(n.tagName);
+    var count = 0;
+    for (var i = 0; i < all.length && count < 2; i++) if (textOf(all[i]) === own) count++;
+    return count > 1;
+  }
+
+  function contextOf(n) {
+    var row = rowOf(n);
+    if (!row) return '';
+    var own = textOf(n).split(' ');
+    var mine = spacedText(row).split(' ').filter(function (w) { return w.length > 1 && own.indexOf(w) === -1; });
+    var seen = {};
+    for (var r = row, k = 0; r.parentElement && r.parentElement !== document.body && k < 3; r = r.parentElement, k++) {
+      var others = Array.prototype.filter.call(r.parentElement.children, function (c) { return c !== r && c.tagName === r.tagName; });
+      if (!others.length) continue;
+      others.forEach(function (c) { spacedText(c).split(' ').forEach(function (w) { seen[w] = true; }); });
+      break;
+    }
+    var picked = mine.filter(function (w) { return !seen[w]; }).slice(0, 2);
+    return (picked.length ? picked : mine.slice(0, 2)).join(' ').slice(0, 80);
+  }
+
+  function inRow(n, item) {
+    if (!item.anchor_context) return true;
+    var row = rowOf(n);
+    var text = row ? spacedText(row) : '';
+    return item.anchor_context.split(' ').every(function (w) { return text.indexOf(w) !== -1; });
+  }
+
   function findAnchor(item) {
     var hit = null;
     var edited = null;
     if (item.selector) {
       try { hit = document.querySelector(item.selector); } catch (e) { hit = null; }
       if (hit && item.anchor_tag && hit.tagName.toLowerCase() !== item.anchor_tag) hit = null;
+      if (hit && !inRow(hit, item)) hit = null;
       if (hit && item.anchor_text && !similar(textOf(hit), item.anchor_text)) {
         if (shortText(textOf(hit)) && shortText(item.anchor_text)) edited = hit;
         hit = null;
@@ -316,6 +367,7 @@
       var bestD = Infinity;
       for (var i = 0; i < all.length; i++) {
         if (textOf(all[i]).slice(0, 40) !== String(item.anchor_text).slice(0, 40)) continue;
+        if (!inRow(all[i], item)) continue;
         var r = all[i].getBoundingClientRect();
         var d = item.doc_y != null ? Math.abs(r.top + window.scrollY - item.doc_y) : 0;
         if (d < bestD) { bestD = d; best = all[i]; }
@@ -1082,7 +1134,7 @@
   };
 
   Feedback.prototype.pointOf = function (item) {
-    var a = item._el && item._el.isConnected && !item._edited ? item._el : null;
+    var a = item._el && item._el.isConnected && !item._edited && inRow(item._el, item) ? item._el : null;
     if (!a) {
       a = findAnchor(item);
       item._el = a;
@@ -1253,6 +1305,7 @@
         anchor_tag: target.tagName.toLowerCase(),
         anchor_text: textOf(target).slice(0, 200) || null,
         anchor_label: describe(target).slice(0, 80),
+        anchor_context: repeated(target) ? contextOf(target) || null : null,
         rel_x: Math.round(rx * 10000) / 10000,
         rel_y: Math.round(ry * 10000) / 10000,
         doc_x: Math.round(rect.left + rx * rect.width + window.scrollX),
@@ -1744,7 +1797,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.6.1'
+    version: '1.6.2'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
