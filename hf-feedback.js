@@ -154,11 +154,11 @@
     '.dropzone.show{display:flex}',
     '.dropzone b{padding:12px 18px;border-radius:999px;background:var(--c);color:#fff;font-size:15px;font-weight:800;box-shadow:0 12px 30px -10px rgba(47,107,255,.7);pointer-events:none}',
     '.item .rb{display:inline-flex;align-items:center;height:18px;padding:0 6px;margin-right:4px;border-radius:999px;background:#fee2e2;color:#b91c1c;font-size:10.5px;font-weight:800;vertical-align:1px}',
+    '.item .rb.gone{background:#f3f4f6;color:#4b5563}',
     '.ask{margin-top:10px;padding:9px 11px;border-radius:10px;background:#fef2f2;color:#991b1b;font-size:12.5px;font-weight:600}',
     '.del{margin-right:auto;height:36px;padding:0 10px;border-radius:10px;font-weight:700;font-size:12.5px;color:#9ca3af}',
     '.del:hover{color:#dc2626;background:#fef2f2}',
     '.btn.danger{background:#dc2626;border-color:#dc2626;color:#fff}',
-    '.team{display:inline-flex;align-items:center;height:20px;padding:0 7px;margin-left:6px;border-radius:999px;background:#111827;color:#fff;font-size:11px;font-weight:800;vertical-align:2px}',
     '.me{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--muted)}',
     '.me b{color:#111827;font-weight:800}',
     '.me input{margin-top:0}',
@@ -169,6 +169,7 @@
     '.namecard .t{font-weight:800;font-size:17px;color:#111827}',
     '.namecard p{margin:6px 0 12px;color:var(--muted);font-size:13px}',
     '.namecard input{margin-top:0;height:42px;font-size:15px}',
+    '.team{display:inline-flex;align-items:center;height:20px;padding:0 7px;margin-left:6px;border-radius:999px;background:#111827;color:#fff;font-size:11px;font-weight:800;vertical-align:2px}',
     '.panel{position:absolute;right:12px;top:calc(var(--top,16px) + 54px);bottom:12px;width:380px;max-width:calc(100% - 24px);display:flex;flex-direction:column;border-radius:18px;background:#fff;box-shadow:0 24px 60px -18px rgba(15,23,42,.5),0 0 0 1px rgba(15,23,42,.08);pointer-events:auto;z-index:8;animation:in .2s cubic-bezier(.2,.8,.2,1) both;overflow:hidden}',
     '.panel .ph{display:flex;align-items:center;gap:8px;padding:14px 14px 8px}',
     '.panel .ph .t{flex:1;font-weight:800;font-size:16px}',
@@ -227,7 +228,6 @@
     return null;
   }
 
-  function rememberedMode() {
   function savedName() {
     return String(store('session', 'hffb-name') || store('local', 'hffb-name') || '').trim().slice(0, 40);
   }
@@ -237,6 +237,7 @@
     store('local', 'hffb-name', name || null);
   }
 
+  function rememberedMode() {
     var since = parseInt(store('session', 'hffb-on'), 10);
     return since > 0 && Date.now() - since < MODE_KEEP_MS;
   }
@@ -288,7 +289,8 @@
   function similar(a, b) {
     a = (a || '').replace(/\s+/g, ' ').trim().slice(0, 40);
     b = (b || '').replace(/\s+/g, ' ').trim().slice(0, 40);
-    if (!a || !b) return true;
+    if (!b) return true;
+    if (!a) return false;
     return a === b || a.indexOf(b.slice(0, 12)) === 0 || b.indexOf(a.slice(0, 12)) === 0;
   }
 
@@ -442,10 +444,10 @@
     this.teamKey = store('local', 'hffb-team:' + this.key) || null;
     this.team = false;
     this.own = readOwn(this.key);
-    this.items = [];
-    this.on = rememberedMode();
     this.name = savedName();
     if (this.name) saveName(this.name);
+    this.items = [];
+    this.on = rememberedMode();
     this.tab = null;
     this.env = detectEnv();
     this.hoverEl = null;
@@ -866,8 +868,6 @@
       .catch(function () {});
   };
 
-  Feedback.prototype.disable = function (status) {
-    this.on = false;
   Feedback.prototype.greet = function () {
     if (this.name || this.greeted || store('session', 'hffb-name-later')) return false;
     this.greeted = true;
@@ -946,6 +946,8 @@
     return value;
   };
 
+  Feedback.prototype.disable = function (status) {
+    this.on = false;
     document.documentElement.classList.remove('hffb-on');
     if (this.host.parentNode) this.host.parentNode.removeChild(this.host);
     var global = document.getElementById('hffb-global');
@@ -1080,8 +1082,12 @@
       if (r.width === 0 && r.height === 0) return null;
       return { x: r.left + (item.rel_x != null ? item.rel_x : 0.5) * r.width, y: r.top + (item.rel_y != null ? item.rel_y : 0.5) * r.height, el: a, rect: r };
     }
-    if (item.doc_x != null && item.doc_y != null) return { x: item.doc_x - window.scrollX, y: item.doc_y - window.scrollY, el: null };
+    if (!item.selector && !item.anchor_text && item.doc_x != null && item.doc_y != null) return { x: item.doc_x - window.scrollX, y: item.doc_y - window.scrollY, el: null };
     return null;
+  };
+
+  Feedback.prototype.lost = function (item) {
+    return this.here(item) && !this.pointOf(item);
   };
 
   Feedback.prototype.occluded = function (pt) {
@@ -1185,13 +1191,13 @@
       '<p class="envnote">보고 계신 기기·브라우저·화면 크기가 함께 저장돼요.</p>' +
       '<div class="acts"><button type="button" class="btn cancel">취소</button><button type="submit" class="btn pri">남기기</button></div>';
     this.root.appendChild(card);
+    this.renderWho(card.querySelector('.me'));
     this.anchorCard(card, x, y);
     var ta = card.querySelector('textarea');
     setTimeout(function () { try { ta.focus({ preventScroll: true }); } catch (e) { ta.focus(); } }, 30);
     var box = this.attachBox(card.querySelector('.att'));
     this.pasteInto(ta, box);
     this.dropBox = box;
-    this.renderWho(card.querySelector('.me'));
 
     var onVV = function () { if (card.classList.contains('sheet')) self.fitSheet(card); };
     if (window.visualViewport) window.visualViewport.addEventListener('resize', onVV);
@@ -1321,12 +1327,14 @@
       filesHtml(item.files) +
       '<div class="meta">' + esc([item.author_name, when(item.created_at), item.anchor_label].filter(Boolean).join(' · ')) + '</div>' +
       '<div class="env">' + chips + '</div>' +
+      (this.lost(item) ? '<p class="box gray">이 피드백을 남긴 자리가 지금 화면에 보이지 않아요. 그 내용이 있는 탭이나 접힌 곳을 열면 핀이 다시 나타나요.</p>' : '') +
       this.threadHtml(item) +
       guide +
       '<form class="reply-ta"><textarea maxlength="2000" placeholder="' + esc(placeholder) + '"></textarea><div class="att"></div><div class="me"></div>' +
       '<div class="acts">' + del + acts.join('') + '</div></form>';
     this.root.appendChild(card);
     this.card = card;
+    this.renderWho(card.querySelector('.me'));
     this.positionCard();
     this.renderPins();
     var form = card.querySelector('.reply-ta');
@@ -1334,7 +1342,6 @@
     var box = this.attachBox(form.querySelector('.att'));
     this.cardBox = box;
     this.dropBox = box;
-    this.renderWho(card.querySelector('.me'));
     this.pasteInto(ta, box);
     form.addEventListener('submit', function (e) { e.preventDefault(); });
     ta.addEventListener('keydown', function (e) {
@@ -1388,14 +1395,14 @@
       this.toast(action === 'reopen' ? '무엇을 다시 고쳐야 하는지 적어 주세요' : '댓글이나 파일을 남겨 주세요');
       return;
     }
+    var author = this.takeName(form);
+    if (!author) return;
     var buttons = form.querySelectorAll('.send');
     Array.prototype.forEach.call(buttons, function (b) { b.disabled = true; });
     var payload = { comment: comment || null, action: action || null, files: files, author_name: author };
     this.request('POST', '/' + item.id + '/comments', payload).then(function (fresh) {
       box.destroy();
       self.replace(fresh);
-    var author = this.takeName(form);
-    if (!author) return;
       self.showCard(fresh.id);
       self.toast(action === 'done' ? '완료로 표시했어요. 고객 화면에 초록색으로 보여요'
         : action === 'confirm' ? '완료했어요. 최종 검수 완료로 옮겼어요'
@@ -1519,8 +1526,9 @@
         var comments = i.comments || [];
         var fileCount = (i.files || []).length + comments.reduce(function (n, c) { return n + (c.files || []).length; }, 0);
         var meta = [i.author_name, when(i.created_at), comments.length ? '댓글 ' + comments.length : '', fileCount ? '파일 ' + fileCount : '', envChips(i.env).slice(0, 2).join(' · '), other ? '다른 화면' : ''].filter(Boolean).join(' · ');
+        var gone = !other && self.lost(i);
         return '<button type="button" class="item" data-id="' + i.id + '"><span class="no ' + i.status + '">' + i.number + '</span>' +
-          '<span class="tx"><span class="bd">' + (i.reopened ? '<span class="rb">재수정 요청</span>' : '') + esc(i.body) + '</span><span class="mt">' + esc(meta) + '</span></span>' +
+          '<span class="tx"><span class="bd">' + (i.reopened ? '<span class="rb">재수정 요청</span>' : '') + (gone ? '<span class="rb gone">자리 안 보임</span>' : '') + esc(i.body) + '</span><span class="mt">' + esc(meta) + '</span></span>' +
           '<span class="go">' + (i.status === 'done' && !self.team ? '확인하기' : '보기') + '</span></button>';
       }).join('') : '<div class="empty">' + (self.tab === 'done' ? '아직 수정 완료된 피드백이 없어요.' : self.tab === 'open' ? '남은 피드백이 없어요.' : '피드백이 없어요.') + '</div>') + '</div>' +
       '<div class="pf">' + (self.team ? '우리 팀 링크로 연 기기예요. 피드백을 눌러 댓글·완료·다시 열기·지우기를 할 수 있어요.' : self.tab === 'done' ? '눌러서 그 자리를 확인하고 최종 검수 완료나 재수정 요청을 골라 주세요.' : self.tab === 'confirmed' ? '최종 검수 완료된 피드백은 화면에서 숨겨 둬요. 누르면 그 자리에 다시 보여요.' : '누르면 그 자리로 이동해요. 고쳐진 걸 확인했으면 완료를 눌러 주세요.') + '</div>';
@@ -1554,12 +1562,12 @@
     var pt = this.pointOf(item);
     var target = pt && pt.el;
     var go = function () {
-      self.spot(target || null, item);
+      if (target || pt) self.spot(target || null, item);
       self.showCard(item.id);
     };
     if (target) {
       this.reveal(target).then(go);
-    } else if (item.doc_y != null) {
+    } else if (pt && item.doc_y != null) {
       window.scrollTo({ top: Math.max(0, item.doc_y - window.innerHeight / 2), behavior: 'smooth' });
       setTimeout(go, 700);
     } else {
