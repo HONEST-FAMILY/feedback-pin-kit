@@ -1967,6 +1967,26 @@
     return true;
   }
 
+  function activateInvite() {
+    var hash = new URLSearchParams(location.hash.slice(1));
+    var query = new URLSearchParams(location.search);
+    if ((hash.get('hffb') || query.get('hffb')) !== 'on') return;
+    store('session', 'hffb-hint', null);
+    instance.setMode(true);
+    try {
+      var url = new URL(location.href);
+      if (hash.get('hffb') === 'on') {
+        hash.delete('hffb');
+        url.hash = hash.toString();
+      }
+      if (query.get('hffb') === 'on') {
+        query.delete('hffb');
+        url.search = query.toString();
+      }
+      history.replaceState(history.state, '', url.href);
+    } catch (e) {}
+  }
+
   window.HFFeedback = {
     init: function (opts) {
       if (instance || !opts || !opts.key) return instance;
@@ -1975,6 +1995,7 @@
           instance.teamKey = store('local', 'hffb-team:' + opts.key);
           instance.load();
         }
+        if (instance) activateInvite();
       });
       var start = function () {
         if (instance) return;
@@ -1987,13 +2008,14 @@
           return;
         }
         instance = new Feedback(opts);
+        activateInvite();
       };
       if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
       return instance;
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.6.5'
+    version: '1.6.6'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
