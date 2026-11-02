@@ -342,6 +342,70 @@
     return (picked.length ? picked : mine.slice(0, 2)).join(' ').slice(0, 80);
   }
 
+  function folded(n) {
+    var d = n.closest('details:not([open])');
+    if (!d) return false;
+    var s = d.querySelector('summary');
+    return !s || !s.contains(n);
+  }
+
+  function pressed(n) {
+    return n.getAttribute('aria-pressed') === 'true' || n.getAttribute('aria-selected') === 'true';
+  }
+
+  function openTabs() {
+    var picks = [];
+    var groups = [];
+    Array.prototype.forEach.call(document.querySelectorAll('[role="tab"],button[aria-pressed]'), function (n) {
+      var p = n.parentElement;
+      if (!p || groups.indexOf(p) !== -1 || picks.length >= 5) return;
+      groups.push(p);
+      var group = Array.prototype.filter.call(p.children, function (c) { return c.getAttribute('role') === 'tab' || (c.tagName === 'BUTTON' && c.hasAttribute('aria-pressed')); });
+      var on = group.filter(pressed);
+      if (group.length >= 2 && on.length === 1 && textOf(on[0])) picks.push(textOf(on[0]).slice(0, 40));
+    });
+    return picks;
+  }
+
+  function tabButton(pick) {
+    var list = document.querySelectorAll('[role="tab"],button[aria-pressed]');
+    for (var i = 0; i < list.length; i++) {
+      var t = textOf(list[i]);
+      if (!pressed(list[i]) && (t === pick || (pick.length >= 4 && t.indexOf(pick) === 0))) return list[i];
+    }
+    return null;
+  }
+
+  function whereOf(n, tabs) {
+    var parts = [];
+    var add = function (t) {
+      t = String(t || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+      if (t && parts.indexOf(t) === -1) parts.push(t);
+    };
+    var h1 = document.querySelector('h1');
+    if (h1) add(textOf(h1));
+    tabs.forEach(add);
+    var dialog = n.closest('[role="dialog"],dialog,[aria-modal="true"]');
+    var head = dialog && dialog.querySelector('h1,h2,h3');
+    if (head) add(textOf(head));
+    for (var p = n.parentElement, i = 0; p && p !== document.body && i < 8; p = p.parentElement, i++) {
+      var h = p.querySelector('h2,h3,h4');
+      if (h && !h.contains(n) && textOf(h)) { add(textOf(h)); break; }
+    }
+    return parts.join(' › ').slice(0, 200);
+  }
+
+  function waitFor(test, ms) {
+    var start = Date.now();
+    return new Promise(function (resolve) {
+      (function tick() {
+        if (test()) { resolve(true); return; }
+        if (Date.now() - start > ms) { resolve(false); return; }
+        setTimeout(tick, 100);
+      })();
+    });
+  }
+
   function inRow(n, item) {
     if (!item.anchor_context) return true;
     var row = rowOf(n);
@@ -1140,6 +1204,7 @@
       item._el = a;
     }
     if (a) {
+      if (folded(a)) return null;
       var r = a.getBoundingClientRect();
       if (r.width === 0 && r.height === 0) return null;
       return { x: r.left + (item.rel_x != null ? item.rel_x : 0.5) * r.width, y: r.top + (item.rel_y != null ? item.rel_y : 0.5) * r.height, el: a, rect: r };
@@ -1154,6 +1219,57 @@
 
   Feedback.prototype.edited = function (item) {
     return this.here(item) && !!this.pointOf(item) && !!item._edited;
+  };
+
+  Feedback.prototype.lostNote = function (item) {
+    var where = item.route && item.route.where;
+    var text = String(item.anchor_text || '').replace(/\s+/g, ' ').trim();
+    if (text.length > 60) text = text.slice(0, 60) + '…';
+    return '<p class="box gray">이 피드백을 남긴 자리를 지금 화면에서 찾지 못했어요. 그 내용이 지워졌거나 크게 바뀌었을 수 있어요.' +
+      (where ? '<br>남긴 곳 ' + esc(where) : '') +
+      (text ? '<br>남길 때 글 ‘' + esc(text) + '’' : '') + '</p>';
+  };
+
+  Feedback.prototype.unfold = function (item) {
+    var key = String(item.anchor_text || '').replace(/\s+/g, ' ').trim().slice(0, 20);
+    if (!key) return false;
+    var opened = false;
+    Array.prototype.forEach.call(document.querySelectorAll('details:not([open])'), function (d) {
+      if ((d.textContent || '').replace(/\s+/g, ' ').indexOf(key) !== -1) {
+        d.open = true;
+        opened = true;
+      }
+    });
+    return opened;
+  };
+
+  Feedback.prototype.reach = function (item) {
+    var self = this;
+    var tabs = (item.route && item.route.tabs) || [];
+    var i = 0;
+    var found = function () { return !!self.pointOf(item); };
+    return new Promise(function (resolve) {
+      var next = function () {
+        if (found()) { resolve(true); return; }
+        if (self.unfold(item)) {
+          waitFor(found, 800).then(function (ok) { if (ok) resolve(true); else step(); });
+          return;
+        }
+        step();
+      };
+      var step = function () {
+        while (i < tabs.length) {
+          var btn = tabButton(tabs[i++]);
+          if (btn) {
+            btn.click();
+            waitFor(found, 1500).then(function (ok) { if (ok) resolve(true); else next(); });
+            return;
+          }
+        }
+        resolve(found());
+      };
+      next();
+    });
   };
 
   Feedback.prototype.editedNote = function (item) {
@@ -1296,6 +1412,9 @@
       btn.disabled = true;
       btn.textContent = '남기는 중…';
       var rect = target.getBoundingClientRect();
+      var tabs = openTabs();
+      var where = whereOf(target, tabs);
+      var route = tabs.length || where ? { tabs: tabs, where: where || null } : null;
       var payload = {
         body: body,
         author_name: author,
@@ -1306,6 +1425,7 @@
         anchor_text: textOf(target).slice(0, 200) || null,
         anchor_label: describe(target).slice(0, 80),
         anchor_context: repeated(target) ? contextOf(target) || null : null,
+        route: route,
         rel_x: Math.round(rx * 10000) / 10000,
         rel_y: Math.round(ry * 10000) / 10000,
         doc_x: Math.round(rect.left + rx * rect.width + window.scrollX),
@@ -1402,7 +1522,7 @@
       filesHtml(item.files) +
       '<div class="meta">' + esc([item.author_name, when(item.created_at), item.anchor_label].filter(Boolean).join(' · ')) + '</div>' +
       '<div class="env">' + chips + '</div>' +
-      (this.lost(item) ? '<p class="box gray">이 피드백을 남긴 자리가 지금 화면에 보이지 않아요. 그 내용이 있는 탭이나 접힌 곳을 열면 핀이 다시 나타나요.</p>' : this.edited(item) ? this.editedNote(item) : '') +
+      (this.lost(item) ? this.lostNote(item) : this.edited(item) ? this.editedNote(item) : '') +
       this.threadHtml(item) +
       guide +
       '<form class="reply-ta"><textarea maxlength="2000" placeholder="' + esc(placeholder) + '"></textarea><div class="att"></div><div class="me"></div>' +
@@ -1603,8 +1723,9 @@
         var meta = [i.author_name, when(i.created_at), comments.length ? '댓글 ' + comments.length : '', fileCount ? '파일 ' + fileCount : '', envChips(i.env).slice(0, 2).join(' · '), other ? '다른 화면' : ''].filter(Boolean).join(' · ');
         var gone = !other && self.lost(i);
         var changed = !other && !gone && self.edited(i);
+        var away = gone && i.route && (i.route.tabs || []).filter(function (t) { return !!tabButton(t); })[0];
         return '<button type="button" class="item" data-id="' + i.id + '"><span class="no ' + i.status + '">' + i.number + '</span>' +
-          '<span class="tx"><span class="bd">' + (i.reopened ? '<span class="rb">재수정 요청</span>' : '') + (gone ? '<span class="rb gone">자리 안 보임</span>' : '') + (changed ? '<span class="rb gone">글 바뀜</span>' : '') + esc(i.body) + '</span><span class="mt">' + esc(meta) + '</span></span>' +
+          '<span class="tx"><span class="bd">' + (i.reopened ? '<span class="rb">재수정 요청</span>' : '') + (gone ? '<span class="rb gone">' + (away ? esc(away) + ' 탭' : '자리 안 보임') + '</span>' : '') + (changed ? '<span class="rb gone">글 바뀜</span>' : '') + esc(i.body) + '</span><span class="mt">' + esc(meta) + '</span></span>' +
           '<span class="go">' + (i.status === 'done' && !self.team ? '확인하기' : '보기') + '</span></button>';
       }).join('') : '<div class="empty">' + (self.tab === 'done' ? '아직 수정 완료된 피드백이 없어요.' : self.tab === 'open' ? '남은 피드백이 없어요.' : '피드백이 없어요.') + '</div>') + '</div>' +
       '<div class="pf">' + (self.team ? '우리 팀 링크로 연 기기예요. 피드백을 눌러 댓글·완료·다시 열기·지우기를 할 수 있어요.' : self.tab === 'done' ? '눌러서 그 자리를 확인하고 최종 검수 완료나 재수정 요청을 골라 주세요.' : self.tab === 'confirmed' ? '최종 검수 완료된 피드백은 화면에서 숨겨 둬요. 누르면 그 자리에 다시 보여요.' : '누르면 그 자리로 이동해요. 고쳐진 걸 확인했으면 완료를 눌러 주세요.') + '</div>';
@@ -1635,6 +1756,24 @@
     }
     this.closePanel();
     if (!this.on) this.setMode(true);
+    if (!this.pointOf(item)) {
+      this.reach(item).then(function (ok) {
+        var saved = item.page_url.split('#')[0];
+        var query = saved.indexOf('?') === -1 ? '' : saved.slice(saved.indexOf('?'));
+        if (!ok && query !== location.search && store('session', 'hffb-went') !== String(item.id)) {
+          store('session', 'hffb-went', String(item.id));
+          location.href = saved + '#hffb=' + item.id;
+          return;
+        }
+        self.land(item);
+      });
+      return;
+    }
+    this.land(item);
+  };
+
+  Feedback.prototype.land = function (item) {
+    var self = this;
     var pt = this.pointOf(item);
     var target = pt && pt.el;
     var go = function () {
@@ -1797,7 +1936,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.6.2'
+    version: '1.6.3'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
