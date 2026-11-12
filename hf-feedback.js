@@ -2015,7 +2015,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.6.6'
+    version: '1.7.0'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
@@ -2025,7 +2025,7 @@
       top: SCRIPT.dataset.top,
       hide: SCRIPT.dataset.hide,
       cursorHint: SCRIPT.hasAttribute('data-cursor-hint') && !/^(false|0|off)$/i.test(SCRIPT.dataset.cursorHint),
-      invite: SCRIPT.hasAttribute('data-invite') && !/^(false|0|off)$/i.test(SCRIPT.dataset.invite)
+      invite: /^only$/i.test(String(SCRIPT.dataset.invite || '').trim())
     });
   }
 })();
