@@ -1942,8 +1942,8 @@
 
   function invited(opts) {
     if (!opts.invite) return true;
-    var m = (location.search + '&' + location.hash).match(/hffb=(on|off|\d+)/);
-    if (m && m[1] === 'off') {
+    var m = (location.search + '&' + location.hash).match(/(?:hffb=(on|off|\d+)|feedback=(on|off))/);
+    if (m && (m[1] || m[2]) === 'off') {
       store('local', 'hffb-invited', null);
       return false;
     }
@@ -1956,7 +1956,7 @@
 
   function takeLink(key) {
     var src = location.search + '&' + location.hash;
-    if (/hffb=off/.test(src)) store('local', 'hffb-team:' + key, null);
+    if (/(hffb|feedback)=off/.test(src)) store('local', 'hffb-team:' + key, null);
     var m = src.match(/hffbt=([A-Za-z0-9_-]{8,80})/);
     if (!m) return false;
     store('local', 'hffb-team:' + key, m[1]);
@@ -1968,24 +1968,40 @@
   }
 
   function activateInvite() {
+    // 1.8.0 — 고객에게 보내는 링크는 주소 뒤 ?feedback=on (대표 2026-11-16 "피드백 링크 들어가려면 ?feedback=on으로"). 예전 #hffb=on 도 그대로 켠다.
     var hash = new URLSearchParams(location.hash.slice(1));
     var query = new URLSearchParams(location.search);
-    if ((hash.get('hffb') || query.get('hffb')) !== 'on') return;
+    var names = ['feedback', 'hffb'];
+    var isOn = function (params) { return names.some(function (n) { return params.get(n) === 'on'; }); };
+    if (!isOn(hash) && !isOn(query)) return;
     store('session', 'hffb-hint', null);
     instance.setMode(true);
     try {
       var url = new URL(location.href);
-      if (hash.get('hffb') === 'on') {
-        hash.delete('hffb');
-        url.hash = hash.toString();
-      }
-      if (query.get('hffb') === 'on') {
-        query.delete('hffb');
-        url.search = query.toString();
-      }
+      names.forEach(function (n) {
+        if (hash.get(n) === 'on') hash.delete(n);
+        if (query.get(n) === 'on') query.delete(n);
+      });
+      url.hash = hash.toString();
+      url.search = query.toString();
       history.replaceState(history.state, '', url.href);
     } catch (e) {}
   }
+
+  // 1.8.0 — 주소 뒤 ?develop=on 은 우리 내부 검수 화면(qa-review-kit)을 연다. 사이트에 검수용 한 줄이 옛것이거나 없어도 여기서 불러 준다.
+  function loadReview() {
+    try {
+      if (window.top !== window) return;
+      if (!/[#?&]develop=/.test(location.hash + '&' + location.search)) return;
+      if (document.getElementById('qa-review-js') || (window.qaReview && window.qaReview.version)) return;
+      var s = document.createElement('script');
+      s.id = 'qa-review-js';
+      s.src = 'https://honest-family.github.io/qa-review-kit/qa-review.js';
+      document.head.appendChild(s);
+    } catch (e) {}
+  }
+  loadReview();
+  window.addEventListener('hashchange', loadReview);
 
   window.HFFeedback = {
     init: function (opts) {
@@ -2015,7 +2031,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.7.0'
+    version: '1.8.0'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
