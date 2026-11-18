@@ -1272,19 +1272,6 @@
     return this.here(item) && !this.pointOf(item);
   };
 
-  Feedback.prototype.edited = function (item) {
-    return this.here(item) && !!this.pointOf(item) && !!item._edited;
-  };
-
-  Feedback.prototype.lostNote = function (item) {
-    var where = item.route && item.route.where;
-    var text = String(item.anchor_text || '').replace(/\s+/g, ' ').trim();
-    if (text.length > 60) text = text.slice(0, 60) + '…';
-    return '<p class="box gray">이 피드백을 남긴 자리를 지금 화면에서 찾지 못했어요. 그 내용이 지워졌거나 크게 바뀌었을 수 있어요.' +
-      (where ? '<br>남긴 곳 ' + esc(where) : '') +
-      (text ? '<br>남길 때 글 ‘' + esc(text) + '’' : '') + '</p>';
-  };
-
   Feedback.prototype.unfold = function (item) {
     var key = String(item.anchor_text || '').replace(/\s+/g, ' ').trim().slice(0, 20);
     if (!key) return false;
@@ -1337,14 +1324,6 @@
       };
       next();
     });
-  };
-
-  Feedback.prototype.editedNote = function (item) {
-    var cut = function (t) {
-      t = String(t || '').replace(/\s+/g, ' ').trim();
-      return t.length > 40 ? t.slice(0, 40) + '…' : t;
-    };
-    return '<p class="box gray">남길 때와 글이 바뀐 자리예요. 고친 내용이 맞는지 확인해 주세요.<br>남길 때 ‘' + esc(cut(item.anchor_text)) + '’<br>지금 ‘' + esc(cut(item._edited)) + '’</p>';
   };
 
   Feedback.prototype.occluded = function (pt) {
@@ -1594,7 +1573,6 @@
       filesHtml(item.files) +
       '<div class="meta">' + esc([item.author_name, when(item.created_at), item.anchor_label].filter(Boolean).join(' · ')) + '</div>' +
       '<div class="env">' + chips + '</div>' +
-      (this.lost(item) ? this.lostNote(item) : this.edited(item) ? this.editedNote(item) : '') +
       this.threadHtml(item) +
       guide +
       '<form class="reply-ta"><textarea maxlength="2000" placeholder="' + esc(placeholder) + '"></textarea><div class="att"></div><div class="me"></div>' +
@@ -1794,11 +1772,9 @@
         var comments = i.comments || [];
         var fileCount = (i.files || []).length + comments.reduce(function (n, c) { return n + (c.files || []).length; }, 0);
         var meta = [i.author_name, when(i.created_at), comments.length ? '댓글 ' + comments.length : '', fileCount ? '파일 ' + fileCount : '', envChips(i.env).slice(0, 2).join(' · '), other ? '다른 화면' : ''].filter(Boolean).join(' · ');
-        var gone = !other && self.lost(i);
-        var changed = !other && !gone && self.edited(i);
-        var away = gone && i.route && (i.route.tabs || []).filter(function (t) { return !!tabButton(t); })[0];
+        var away = !other && self.lost(i) && i.route && (i.route.tabs || []).filter(function (t) { return !!tabButton(t); })[0];
         return '<button type="button" class="item" data-id="' + i.id + '"><span class="no ' + i.status + '">' + i.number + '</span>' +
-          '<span class="tx"><span class="bd">' + (i.reopened ? '<span class="rb">재수정 요청</span>' : '') + (gone ? '<span class="rb gone">' + (away ? esc(away) + ' 탭' : '자리 안 보임') + '</span>' : '') + (changed ? '<span class="rb gone">글 바뀜</span>' : '') + esc(i.body) + '</span><span class="mt">' + esc(meta) + '</span></span>' +
+          '<span class="tx"><span class="bd">' + (i.reopened ? '<span class="rb">재수정 요청</span>' : '') + (away ? '<span class="rb gone">' + esc(away) + ' 탭</span>' : '') + esc(i.body) + '</span><span class="mt">' + esc(meta) + '</span></span>' +
           '<span class="go">' + (i.status === 'done' && !self.team ? '확인하기' : '보기') + '</span></button>';
       }).join('') : '<div class="empty">' + (self.tab === 'done' ? '아직 수정 완료된 피드백이 없어요.' : self.tab === 'open' ? '남은 피드백이 없어요.' : '피드백이 없어요.') + '</div>') + '</div>' +
       '<div class="pf">' + (self.team ? '우리 팀 링크로 연 기기예요. 피드백을 눌러 댓글·완료·다시 열기·지우기를 할 수 있어요.' : self.tab === 'done' ? '눌러서 그 자리를 확인하고 최종 검수 완료나 재수정 요청을 골라 주세요.' : self.tab === 'confirmed' ? '최종 검수 완료된 피드백은 화면에서 숨겨 둬요. 누르면 그 자리에 다시 보여요.' : '누르면 그 자리로 이동해요. 고쳐진 걸 확인했으면 완료를 눌러 주세요.') + '</div>';
@@ -2047,7 +2023,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.9.0'
+    version: '1.9.1'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
