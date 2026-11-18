@@ -417,7 +417,23 @@
     return item.anchor_context.split(' ').every(function (w) { return text.indexOf(w) !== -1; });
   }
 
+  function markedFor(item) {
+    var no = String(item.number == null ? '' : item.number).replace(/[^0-9]/g, '');
+    if (!no) return null;
+    var all = document.querySelectorAll('[data-hffb-pin~="' + no + '"]');
+    for (var i = 0; i < all.length; i++) {
+      var r = all[i].getBoundingClientRect();
+      if (r.width || r.height) return all[i];
+    }
+    return all[0] || null;
+  }
+
   function findAnchor(item) {
+    var mark = markedFor(item);
+    if (mark) {
+      item._edited = item.anchor_text && !similar(textOf(mark), item.anchor_text) ? textOf(mark) : null;
+      return mark;
+    }
     var hit = null;
     var edited = null;
     if (item.selector) {
@@ -2031,7 +2047,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.8.0'
+    version: '1.9.0'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
