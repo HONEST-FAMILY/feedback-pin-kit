@@ -34,6 +34,8 @@
   var ICON_X = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
   var ICON_CLIP = '<svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="M13.5 6.5l-5.8 5.8a1.6 1.6 0 0 0 2.3 2.3l6-6a3.2 3.2 0 0 0-4.5-4.5l-6.2 6.2a4.8 4.8 0 0 0 6.8 6.8l5.2-5.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var ICON_CHECK = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3.5 8.3l2.8 2.7L12.5 5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var ICON_TUCK = '<svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M6 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 4.5v11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  var ICON_BACK = '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M7.5 2.5L4 6l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var CURSOR = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M3 3h17a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-7l-5 4v-4H6a3 3 0 0 1-3-3z' fill='%232f6bff' stroke='white' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M9 10.5h8M13 6.5v8' stroke='white' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E\") 3 3, crosshair";
 
   var CSS = [
@@ -42,7 +44,19 @@
     '.root{position:fixed;inset:0;pointer-events:none;font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,system-ui,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:14px;line-height:1.55;color:#111827;letter-spacing:-0.01em;word-break:keep-all;-webkit-font-smoothing:antialiased;--c:#2f6bff;--c2:#1f56e6;--soft:rgba(47,107,255,.10);--ok:#16a34a;--muted:#6b7280}',
     'button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0;margin:0}',
     'button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--c);outline-offset:2px}',
-    '.bar{position:absolute;right:16px;top:var(--top,16px);display:flex;gap:8px;pointer-events:auto;z-index:6}',
+    '.bar{position:absolute;right:16px;top:var(--top,16px);display:flex;gap:8px;max-width:calc(100% - 32px);pointer-events:auto;z-index:6;transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .2s}',
+    '.bar .ls,.bar .hb{flex:none;white-space:nowrap}',
+    '.bar .tg{min-width:0}',
+    '.tg .lb{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.bar.away{transform:translateX(calc(100% + 24px));opacity:0;visibility:hidden;pointer-events:none;transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .2s,visibility 0s linear .28s}',
+    '.hb{display:inline-grid;place-items:center;width:42px;height:42px;border-radius:999px;background:#fff;color:#4b5563;box-shadow:0 8px 24px -8px rgba(15,23,42,.35),0 0 0 1px rgba(15,23,42,.08)}',
+    '.hb:hover{color:#111827;background:#f9fafb}',
+    '.dock{position:absolute;right:0;top:50%;width:30px;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border-radius:14px 0 0 14px;background:#fff;color:#111827;box-shadow:0 8px 24px -8px rgba(15,23,42,.35),0 0 0 1px rgba(15,23,42,.08);pointer-events:auto;z-index:6;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;transform:translateX(calc(100% + 4px));visibility:hidden;transition:transform .28s cubic-bezier(.2,.8,.2,1),background-color .2s,color .2s,visibility 0s linear .28s}',
+    '.dock.show{transform:none;visibility:visible;transition:transform .28s cubic-bezier(.2,.8,.2,1) .12s,background-color .2s,color .2s}',
+    '.dock:hover{background:#f9fafb}',
+    '.dock.on{background:var(--c);color:#fff}',
+    '.dock.drag{transition:none;cursor:grabbing}',
+    '.dock .dot{position:absolute;left:4px;top:5px;width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 2px #fff}',
     '.tg{display:inline-flex;align-items:center;gap:9px;height:42px;padding:0 14px 0 12px;border-radius:999px;background:#fff;color:#111827;font-weight:700;font-size:14px;box-shadow:0 8px 24px -8px rgba(15,23,42,.35),0 0 0 1px rgba(15,23,42,.08);transition:background-color .2s,color .2s,box-shadow .2s}',
     '.tg .sw{position:relative;width:34px;height:20px;border-radius:999px;background:#d1d5db;transition:background-color .2s;flex:none}',
     '.tg .sw:after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .22s cubic-bezier(.2,.8,.2,1)}',
@@ -204,7 +218,7 @@
     '.panel.sheet{top:auto!important;height:min(78vh,620px);bottom:0;right:0;left:0;width:auto;max-width:none;border-radius:18px 18px 0 0}',
     '@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}',
     '@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(17,24,39,.45),0 0 0 2px #fff}100%{box-shadow:0 0 0 14px rgba(17,24,39,0),0 0 0 2px #fff}}',
-    '@media (max-width:640px){.namebg{align-items:flex-start;padding-top:72px}.toast{bottom:84px}.bar{right:10px}.tg{height:40px;padding:0 12px 0 10px;font-size:13px}.ls{height:40px;padding:0 12px;font-size:13px}.hint{top:auto;bottom:16px;transform:translate(-50%,8px)}.on-mode .hint.show{transform:translate(-50%,0)}.nudge{right:10px}}',
+    '@media (max-width:640px){.namebg{align-items:flex-start;padding-top:72px}.toast{bottom:84px}.bar{right:10px;max-width:calc(100% - 20px)}.tg{height:40px;padding:0 12px 0 10px;font-size:13px}.ls{height:40px;padding:0 12px;font-size:13px}.hb{width:40px;height:40px}.hint{top:auto;bottom:16px;transform:translate(-50%,8px)}.on-mode .hint.show{transform:translate(-50%,0)}.nudge{right:10px}}',
     '@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}'
   ].join('\n');
 
@@ -597,6 +611,9 @@
     if (this.name) saveName(this.name);
     this.items = [];
     this.on = rememberedMode();
+    this.barHidden = store('local', 'hffb-bar-hidden:' + this.key) === '1';
+    var dockAt = parseFloat(store('local', 'hffb-dock:' + this.key));
+    this.dockAt = dockAt >= 0 && dockAt <= 1 ? dockAt : 0.5;
     this.tab = null;
     this.env = detectEnv();
     this.hoverEl = null;
@@ -608,6 +625,7 @@
     this.build();
     this.bind();
     this.applyMode();
+    this.positionDock();
     this.load();
     this.refineOs();
   }
@@ -650,8 +668,10 @@
       '<svg class="spot" aria-hidden="true"><path class="sh" fill-rule="evenodd"></path><path class="rg"></path></svg>' +
       '<div class="pins"></div>' +
       '<svg class="press" viewBox="0 0 56 56" aria-hidden="true"><circle class="bg" cx="28" cy="28" r="24"></circle><circle class="fg" cx="28" cy="28" r="24"></circle></svg>' +
-      '<div class="bar"><button type="button" class="tg" aria-pressed="false"><span class="ic">' + ICON_PIN + '</span><span class="lb">피드백 남기기</span><span class="sw" aria-hidden="true"></span></button>' +
-      '<button type="button" class="ls" aria-label="피드백 목록">' + ICON_LIST + '<span>목록</span><span class="n" hidden>0</span></button></div>' +
+      '<div class="bar' + (this.barHidden ? ' away' : '') + '"><button type="button" class="tg" aria-pressed="false"><span class="ic">' + ICON_PIN + '</span><span class="lb">피드백 남기기</span><span class="sw" aria-hidden="true"></span></button>' +
+      '<button type="button" class="ls" aria-label="피드백 목록">' + ICON_LIST + '<span>목록</span><span class="n" hidden>0</span></button>' +
+      '<button type="button" class="hb" aria-label="피드백 단추 숨기기" title="단추 숨기기">' + ICON_TUCK + '</button></div>' +
+      '<button type="button" class="dock' + (this.barHidden ? ' show' : '') + '" aria-label="피드백 단추 보이기" title="단추 보이기 · 위아래로 끌어 옮길 수 있어요"><span class="dot" hidden></span>' + ICON_PIN + ICON_BACK + '</button>' +
       '<div class="toast" role="status" aria-live="polite"></div>' +
       '<div class="dropzone" aria-hidden="true"><b>여기에 놓으면 첨부돼요</b></div>';
 
@@ -664,7 +684,8 @@
       hint: this.q('.hint'), hintText: this.q('.hint span'), hover: this.q('.hover'), tag: this.q('.tag'),
       cursorHint: this.q('.cursor-hint'),
       pins: this.q('.pins'), press: this.q('.press'), tg: this.q('.tg'), tgLabel: this.q('.tg .lb'),
-      bar: this.q('.bar'), ls: this.q('.ls'), lsN: this.q('.ls .n'), toast: this.q('.toast'), spot: this.q('.spot'),
+      bar: this.q('.bar'), ls: this.q('.ls'), lsN: this.q('.ls .n'), hb: this.q('.hb'), dock: this.q('.dock'), dockDot: this.q('.dock .dot'),
+      toast: this.q('.toast'), spot: this.q('.spot'),
       spotSh: this.q('.spot .sh'), spotRg: this.q('.spot .rg'), dropzone: this.q('.dropzone')
     };
   };
@@ -679,6 +700,8 @@
     var ui = this.ui;
     ui.tg.addEventListener('click', function () { self.setMode(!self.on); });
     ui.ls.addEventListener('click', function () { self.openPanel(); });
+    ui.hb.addEventListener('click', function () { self.setBarHidden(true); });
+    this.bindDock();
     this.q('.hint button').addEventListener('click', function () {
       ui.hint.classList.remove('show');
       store('session', 'hffb-hint', 'off');
@@ -698,6 +721,10 @@
       if (e.key === 'hffb-posted:' + self.key && e.newValue === '1') {
         self.hasPosted = true;
         self.showCursorHint(null);
+      }
+      if (e.key === 'hffb-bar-hidden:' + self.key && (e.newValue === '1') !== self.barHidden) {
+        self.barHidden = e.newValue === '1';
+        self.applyBarHidden();
       }
     });
 
@@ -756,6 +783,7 @@
       self.env.viewport_w = window.innerWidth;
       self.env.viewport_h = window.innerHeight;
       self.env.layout = window.innerWidth <= MOBILE_MAX ? 'mobile' : window.innerWidth <= 1024 ? 'tablet' : 'pc';
+      self.positionDock();
       self.schedule();
     });
     setInterval(function () { if (self.on || self.spotEl) self.schedule(); }, 400);
@@ -776,6 +804,85 @@
       self.hideDrop();
       if (self.dropBox && e.dataTransfer) self.dropBox.add(e.dataTransfer.files);
     });
+  };
+
+  Feedback.prototype.bindDock = function () {
+    var self = this;
+    var dock = this.ui.dock;
+    var drag = null;
+    var skipClickUntil = 0;
+    var saveSpot = function () { store('local', 'hffb-dock:' + self.key, self.dockAt.toFixed(3)); };
+    dock.addEventListener('pointerdown', function (e) {
+      if (e.button) return;
+      drag = { id: e.pointerId, y: e.clientY, from: dock.offsetTop + dock.offsetHeight / 2, moved: false };
+      try { dock.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    dock.addEventListener('pointermove', function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      if (!drag.moved && Math.abs(e.clientY - drag.y) < 6) return;
+      drag.moved = true;
+      dock.classList.add('drag');
+      self.moveDock(drag.from + e.clientY - drag.y);
+    });
+    ['pointerup', 'pointercancel'].forEach(function (t) {
+      dock.addEventListener(t, function (e) {
+        if (!drag || e.pointerId !== drag.id) return;
+        if (drag.moved) {
+          skipClickUntil = Date.now() + 400;
+          saveSpot();
+        }
+        drag = null;
+        dock.classList.remove('drag');
+      });
+    });
+    dock.addEventListener('click', function () {
+      if (Date.now() < skipClickUntil) return;
+      self.setBarHidden(false);
+    });
+    dock.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      self.moveDock(dock.offsetTop + dock.offsetHeight / 2 + (e.key === 'ArrowUp' ? -32 : 32));
+      saveSpot();
+    });
+  };
+
+  Feedback.prototype.setBarHidden = function (hidden) {
+    var ui = this.ui;
+    var focused = this.shadow.activeElement;
+    this.barHidden = !!hidden;
+    store('local', 'hffb-bar-hidden:' + this.key, this.barHidden ? '1' : null);
+    this.applyBarHidden();
+    if (this.barHidden) {
+      if (focused === ui.hb) ui.dock.focus();
+      this.toast('오른쪽 끝 탭을 누르면 다시 보여요');
+    } else {
+      if (focused === ui.dock) ui.hb.focus();
+      this.showNudge();
+    }
+  };
+
+  Feedback.prototype.applyBarHidden = function () {
+    var ui = this.ui;
+    ui.bar.classList.toggle('away', this.barHidden);
+    ui.dock.classList.toggle('show', this.barHidden);
+    ui.hint.classList.toggle('show', this.on && !this.barHidden && store('session', 'hffb-hint') !== 'off');
+    if (!this.barHidden) return;
+    this.closePanel();
+    this.hideNudge();
+    this.positionDock();
+  };
+
+  Feedback.prototype.moveDock = function (center) {
+    this.dockAt = clamp(center / (window.innerHeight || 1), 0, 1);
+    this.positionDock();
+  };
+
+  Feedback.prototype.positionDock = function () {
+    var dock = this.ui.dock;
+    var h = dock.offsetHeight || 56;
+    var vh = window.innerHeight;
+    dock.style.top = clamp(Math.round(this.dockAt * vh - h / 2), 8, Math.max(8, vh - h - 8)) + 'px';
   };
 
   Feedback.prototype.showDrop = function () {
@@ -1007,11 +1114,13 @@
     ui.tg.classList.toggle('on', this.on);
     ui.tg.setAttribute('aria-pressed', this.on ? 'true' : 'false');
     ui.tgLabel.textContent = this.on ? '피드백 모드 켜짐' : '피드백 남기기';
+    ui.dock.classList.toggle('on', this.on);
+    ui.dock.setAttribute('aria-label', this.on ? '피드백 모드 켜짐 · 단추 보이기' : '피드백 단추 보이기');
     var touchFirst = isMobileWidth() || (this.env.touch && !matchMedia('(hover:hover)').matches);
     ui.hintText.innerHTML = touchFirst
       ? '<b>꾹 누르면</b> 그 자리에 피드백을 남겨요 · 탭은 평소처럼 돼요'
       : '<b>우클릭하면</b> 그 자리에 피드백을 남겨요 · 클릭은 평소처럼 돼요';
-    ui.hint.classList.toggle('show', this.on && store('session', 'hffb-hint') !== 'off');
+    ui.hint.classList.toggle('show', this.on && !this.barHidden && store('session', 'hffb-hint') !== 'off');
     this.renderPins();
   };
 
@@ -1169,7 +1278,7 @@
 
   Feedback.prototype.showNudge = function () {
     var self = this;
-    if (this.on || this.nudge) return;
+    if (this.on || this.nudge || this.barHidden) return;
     var done = this.team ? 0 : this.items.filter(function (i) { return i.status === 'done'; }).length;
     var n;
     if (done && store('session', 'hffb-done-nudged') !== String(done)) {
@@ -1208,6 +1317,7 @@
     n.hidden = !(open || done);
     n.classList.toggle('done', done > 0);
     n.textContent = done > 0 ? '완료 ' + done : String(open);
+    this.ui.dockDot.hidden = !(done > 0);
   };
 
   Feedback.prototype.here = function (item) {
@@ -2023,7 +2133,7 @@
     },
     instance: function () { return instance; },
     detectEnv: detectEnv,
-    version: '1.9.1'
+    version: '1.10.0'
   };
 
   if (SCRIPT && SCRIPT.dataset && SCRIPT.dataset.key) {
